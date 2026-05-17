@@ -40,7 +40,7 @@ or from the course). Target variable: `CPIAUCSL`.
 
 ---
 
-## Design decisions (defensible at the thesis defense)
+## Design decisions
 
 ### 2SRR — main engine: `coulombe_fast`
 
@@ -54,7 +54,7 @@ form on the `T × T` kernel:
 $$K_{du}(\lambda_1, \lambda_2) = \frac{1}{\lambda_1} \sum_k \omega_k\, (X_k X_k') \odot M_{inn} + \frac{1}{\lambda_2} X_{full} X_{full}'$$
 
 where `M_inn[i,j] = min(i,j) - 1`. CV via generalized Cholesky decomposition
-sweeps `n_lambda = 25` in O(T²) per λ. **Result: ~10-50x faster with no
+sweeps `n_lambda = 15` in O(T²) per λ. **Result: ~10-50x faster with no
 mathematical loss.**
 
 #### Validations at the start of `03`
