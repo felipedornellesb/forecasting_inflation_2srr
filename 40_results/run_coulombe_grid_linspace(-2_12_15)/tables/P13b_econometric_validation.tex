@@ -1,0 +1,25 @@
+% latex table generated in R 4.3.1 by xtable 1.8-4 package
+% Sun May 17 04:52:35 2026
+\begin{table}[ht]
+\centering
+\begin{tabular}{llll}
+  \hline
+id & description & status & evidence \\ 
+  \hline
+V1 & yout = cumsum(y) per h & OK & max diff across 4 h: 0.00e+00 \\ 
+  V2 & Standalone reproduces Eq. 5 of the paper (dual = primal) & OK & validated in 03 (diff $<$ 1e-6) \\ 
+  V3 & coulombe\_fast bit-exact to original dualGRR & OK & validated in 03 (diff $<$ 1e-9) \\ 
+  V4 & Coulombe (2025): TVP $>$ Ridge more at long h than short h & OK & ratio h=1: 1.022 vs h=12: 0.966 \\ 
+  V5 & sigma\verb|^|2\_u,k heterogeneous across variables & OK & max/min ratio (FAVAR): 13.94, 19.67, 20.09, 11.88 \\ 
+  V6 & Step 4 recalibrates Step 1 (cor $<$ 0.7 in some h) & OK & cor per h: 0.83, 0.71, 0.63, 0.68 \\ 
+  V7 & CV lambda not at the grid boundary & OK & max \% windows at boundary: 0.0\% \\ 
+  V8 & Non-trivial TVP betas (sd$>$0 in $>$30\% of coefs) & OK & active/total per h: 11/11, 11/11, 11/11, 11/11 \\ 
+  V9 & DM produced for most comparisons & OK & 100\% of pairs with DM defined \\ 
+  V10 & GW: sufficient n for asymptotic chi\verb|^|2 & OK & min n: 168 \\ 
+  V11 & 90\% MCS: at least 1 survivor per h & OK & models per h: 18, 18, 18, 18 \\ 
+  V12 & Forecasts don't explode ($|$f$|$ $<$ 10x$|$y$|$) & OK & 0 outliers in 2160 (0.00\%) \\ 
+   \hline
+\end{tabular}
+\caption{Econometric validation and consistency with Coulombe (2025)} 
+\label{tab:validation}
+\end{table}

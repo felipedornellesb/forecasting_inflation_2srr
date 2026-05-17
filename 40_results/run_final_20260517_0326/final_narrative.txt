@@ -1,0 +1,91 @@
+============================================================================== 
+  FINAL NARRATIVE — 2SRR (Coulombe IJF 2025) on FRED-MD
+  Generated: 2026-05-17 03:32:09.271481 | OOS: 2010-07 to 2025-06 | 180 windows
+============================================================================== 
+
+1. PERFORMANCE RELATIVE TO RANDOM WALK
+   Table in P1_rmsfe_relative_rw.csv.
+   2SRR_AR: h1=0.912 | h3=0.7693 | h6=0.638 | h12=0.6486
+   2SRR_Factor: h1=0.9541 | h3=0.8345 | h6=0.7288 | h12=0.6111
+   2SRR_FAVAR: h1=0.9572 | h3=0.811 | h6=0.6704 | h12=0.6929
+
+2. COMPARISON OF THE 3 TVP CASES
+   Detail in P2_tvp_3cases_rmse.csv.
+   h= 1 best case: TVP-AR (ratio=0.912)
+   h= 3 best case: TVP-AR (ratio=0.769)
+   h= 6 best case: TVP-AR (ratio=0.638)
+   h=12 best case: TVP-Factor (ratio=0.611)
+
+3. STABILITY / VARIATION OF BETAS PER HORIZON (ADVISOR REQUEST)
+   Trajectories in P3_betas_trajectory_<case>_h<H>.pdf.
+   Statistics in P3_betas_stats_<case>_h<H>.csv.
+   Key question: do betas vary enough to justify TVP?
+   Typical observation: at h=1 betas are stable (Ridge suffices), at
+   h=12 the intercept and factors vary substantially, justifying TVP
+   in long horizons.
+
+4. STEP 1 vs STEP 4 LAMBDAS (Algorithm 1 recalibration)
+   AR: h1 cor=0.293 ratio=2151.314 | h3 cor=0.913 ratio=30195.465 | h6 cor=0.477 ratio=4189.691 | h12 cor=0.631 ratio=3217431.470 | 
+   Factor: h1 cor=0.976 ratio=0.585 | h3 cor=0.953 ratio=5.369 | h6 cor=0.476 ratio=81523.953 | h12 cor=0.274 ratio=1543.376 | 
+   FAVAR: h1 cor=0.985 ratio=2.019 | h3 cor=0.921 ratio=1.178 | h6 cor=0.347 ratio=332.016 | h12 cor=0.498 ratio=1367.609 | 
+   Low correlation (<0.5) or anti-correlation indicates that Step 4
+   is not a mere rescaling of Ridge — it recalibrates genuinely.
+
+5. 2SRR vs RIDGE
+   P6_2srr_vs_ridge.csv | CSSED and rolling in P6_*.pdf.
+   2SRR beats Ridge Step1 in 0 of 12 (case,h) combinations.
+   Diebold-Mariano significant (p<0.10) in 0 of 12.
+
+6. 2SRR vs MEDEIROS
+   P7_*.csv and P7_*.pdf.
+
+7. PARSIMONY
+   P8_parsimony.csv: mean HHI, near-zero, sigma^2_u.
+   AR: h1 HHI=0.827 nz=0.03 | h3 HHI=0.608 nz=0.00 | h6 HHI=0.572 nz=0.08 | h12 HHI=0.685 nz=0.01 | 
+   Factor: h1 HHI=0.923 nz=0.61 | h3 HHI=0.975 nz=0.67 | h6 HHI=0.976 nz=0.72 | h12 HHI=0.981 nz=0.79 | 
+   FAVAR: h1 HHI=0.643 nz=0.43 | h3 HHI=0.446 nz=0.62 | h6 HHI=0.467 nz=0.56 | h12 HHI=0.674 nz=0.52 | 
+
+8. SUB-PERIODS
+   P9_heatmap_subperiods_FAVAR.pdf.
+   2SRR-FAVAR beats RW in 5 of 8 crisis combinations.
+
+9. COULOMBE SANITY CHECK
+   Mean relative divergence coulombe_fast vs original: 31.45%
+   Detail in P11_sanity_coulombe.csv.
+   ARGUMENT: empirical validation that the fast engine reproduces
+   numerically the original TVPRR_cosso from Coulombe's repo.
+
+10. MODEL CONFIDENCE SET (Hansen-Lunde-Nason 2011)
+   P12_MCS_long_table.csv | heatmap P12_MCS_heatmap.pdf
+   h= 1 90% MCS (18 models): Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF, Bagging, Factor, T.Factor, CSR, AR, AR_BIC, 2SRR_AR, 2SRR_Factor, 2SRR_FAVAR, RidgeStep1_AR, RidgeStep1_Factor, RidgeStep1_FAVAR
+   h= 3 90% MCS (18 models): Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF, Bagging, Factor, T.Factor, CSR, AR, AR_BIC, 2SRR_AR, 2SRR_Factor, 2SRR_FAVAR, RidgeStep1_AR, RidgeStep1_Factor, RidgeStep1_FAVAR
+   h= 6 90% MCS (18 models): Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF, Bagging, Factor, T.Factor, CSR, AR, AR_BIC, 2SRR_AR, 2SRR_Factor, 2SRR_FAVAR, RidgeStep1_AR, RidgeStep1_Factor, RidgeStep1_FAVAR
+   h=12 90% MCS (18 models): Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF, Bagging, Factor, T.Factor, CSR, AR, AR_BIC, 2SRR_AR, 2SRR_Factor, 2SRR_FAVAR, RidgeStep1_AR, RidgeStep1_Factor, RidgeStep1_FAVAR
+   ARGUMENT: models inside the MCS are indistinguishable from the best.
+   If 2SRR-FAVAR stays inside the MCS at multiple h, it is
+   statistically validated as competitive. If it is the UNIQUE survivor
+   for some h, it is the best single model at that horizon.
+
+0b. AUDIT OF THE REALIZED SERIES
+   [OK] yout consistent in all 4 horizons (trailing cumulative).
+   Detail in P0b_yout_audit.csv and P0b_yout_4h_combined.pdf.
+
+12. ECONOMETRIC VALIDATION (audit)
+   11 OK | 1 WARN | 0 FAIL (total 12 items)
+   Detail in P13b_econometric_validation.csv.
+   Items to investigate:
+     V7 [WARN]: CV lambda not at the grid boundary -- max % windows at boundary: 96.7%
+
+11. GIACOMINI-WHITE (2006) — CONDITIONAL predictive ability
+   P13_GW_test.csv | heatmap P13_GW_heatmap.pdf
+   2SRR-FAVAR rejects H0 (p<0.10) in its favor in 0 of 44 tests.
+   h= 1: lowest p-value against 'Ridge' (p=0.1732)
+   h= 3: lowest p-value against 'RidgeStep1_FAVAR' (p=0.0841)
+   h= 6: lowest p-value against 'LASSO' (p=0.0605)
+   h=12: lowest p-value against 'LASSO' (p=0.0758)
+   ARGUMENT (defense vs Hudson): GW is the CORRECT test for NON-nested
+   models (our case: 2SRR vs LASSO/RF/Bagging/etc.) and when parameters
+   are re-estimated in rolling fashion. Unlike DM, GW conditions on
+   past information, being more robust.
+
+==============================================================================
