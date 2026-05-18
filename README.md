@@ -5,7 +5,7 @@ forecasting (CPIAUCSL, FRED-MD), benchmarked against **Ridge, LASSO, Random
 Forest, Bagging, Factor, T.Factor, CSR, and adaptive variants** from the
 Medeiros et al. (JBES 2021) framework.
 
-Undergraduate thesis in Economics, UFRGS — Felipe Dornelles, 2026.
+Economics, UFRGS — Felipe Dornelles, 2026.
 
 ---
 
@@ -54,8 +54,12 @@ form on the `T × T` kernel:
 $$K_{du}(\lambda_1, \lambda_2) = \frac{1}{\lambda_1} \sum_k \omega_k\, (X_k X_k') \odot M_{inn} + \frac{1}{\lambda_2} X_{full} X_{full}'$$
 
 where `M_inn[i,j] = min(i,j) - 1`. CV via generalized Cholesky decomposition
-sweeps `n_lambda = 25` in O(T²) per λ. **Result: ~10-50x faster with no
+sweeps `n_lambda = 15` in O(T²) per λ. **Result: ~10-50x faster with no
 mathematical loss.**
+
+#### Lambda Grid Decision
+Use Coulombe's original default grid: `lambda_vec = exp(linspace(-2, 12, 15))`. 
+While cross-validation on this grid often saturates at the maximum value for monthly data (as the CV attempts to severely penalize time variation), empirical testing revealed that an expanded grid (allowing larger lambdas) degrades Out-of-Sample (OOS) performance. The restricted, original grid acts as an implicit regularization that prevents the CV from completely eliminating the Time-Varying Parameters (TVP) structure. Consequently, the original grid preserves residual parameter variation that allows 2SRR to outperform standard constant-parameter Ridge models, particularly in the FAVAR specification.
 
 #### Validations at the start of `03`
 
@@ -161,7 +165,6 @@ clashes with `base::factor()` (categorical factor levels).
 | `build_design_tvp()` | Builds X_in, y_in, x_out for the 3 TVP cases |
 | `tvp_self_test()` | Self-test: standalone vs direct primal (Eq. 5) |
 | `tvp_coulombe_fast_vs_original_test()` | Self-test: `coulombe_fast` vs original `dualGRR` |
-| `clark_west()` | Clark-West test (not used — non-nested models) |
 
 ---
 

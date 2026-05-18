@@ -6,8 +6,11 @@
 40_results/tables/*.csv
 40_results/tables/*.tex
 40_results/figures/*.pdf
-20_tools/21_coulombe/*.R
-20_tools/22_medeiros/*.R
+40_results/tables
+40_results/figures
+40_results/**/*.tex
+40_results/**/*.txt
+40_results/run_final_2026_05_16_ptbr/**
 .DS_Store
 .claude
 50_backup_historical
