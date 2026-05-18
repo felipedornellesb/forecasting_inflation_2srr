@@ -40,7 +40,7 @@ or from the course). Target variable: `CPIAUCSL`.
 
 ---
 
-## Design decisions (defensible at the thesis defense)
+## Design decisions
 
 ### 2SRR — main engine: `coulombe_fast`
 
