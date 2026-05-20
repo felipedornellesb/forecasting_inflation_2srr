@@ -1354,14 +1354,30 @@ if (!has_mcs) {
              latex_caption = "MCS: models inside the 90% and 75% sets per horizon",
              latex_label   = "tab:mcs_long")
 
-    # Heatmap: model x horizon
-    p <- ggplot(mcs_long, aes(x = factor(h), y = model)) +
-      geom_tile(aes(fill = factor(in_MCS_90 + in_MCS_75)), color = "white") +
-      scale_fill_manual(values = c("0" = "grey85", "1" = "lightblue",
-                                     "2" = "steelblue"),
-                         labels = c("Out", "75% MCS", "90% and 75% MCS"),
-                         name = "Status") +
+    # Heatmap: model x horizon.
+    # Bugfix: with all models surviving (a frequent outcome at alpha=0.10
+    # because the MCS is conservative), only the factor level "2" appears
+    # in the data. scale_fill_manual then maps the legend by POSITION and
+    # mislabels the only present level as the first label ("Out"). We pin
+    # the legend explicitly through `limits + labels` and use `drop=FALSE`
+    # to keep all three categories in the legend regardless of which
+    # values are observed in the data.
+    mcs_long$status_lvl <- factor(as.character(mcs_long$in_MCS_90 +
+                                                 mcs_long$in_MCS_75),
+                                    levels = c("0", "1", "2"))
+    p <- ggplot(mcs_long, aes(x = factor(h), y = model, fill = status_lvl)) +
+      geom_tile(color = "white") +
+      scale_fill_manual(
+        values = c("0" = "grey85", "1" = "#FFD580", "2" = "#2CA02C"),
+        labels = c("0" = "Out (eliminated)",
+                    "1" = "In 75% MCS only",
+                    "2" = "In 90% and 75% MCS"),
+        breaks  = c("0", "1", "2"),
+        limits  = c("0", "1", "2"),
+        drop    = FALSE,
+        name    = "MCS status") +
       labs(title = "Model Confidence Set per horizon",
+            subtitle = "Green = both MCS sets; orange = only 75% set; grey = eliminated",
             x = "Horizon (h)", y = "Model") +
       theme_minimal()
     save_fig(p, "P12_MCS_heatmap", 10, 7)
