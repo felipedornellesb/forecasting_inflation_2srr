@@ -220,6 +220,10 @@ All auto-install via `00_setup.R` and the header of `04_analysis.R`.
   - Replication code:
     github.com/hugocout/Replication-codes-for-Time-Varying-Parameters-as-Ridge-Regressions
 
+- **Caldeira, J. F.** (2016). Predicting the yield curve using forecast combinations.
+  *Computational Statistics & Data Analysis, Volume 100, 79-98.
+  https://doi.org/10.1016/j.csda.2014.05.008
+
 - **Medeiros, M. C., Vasconcelos, G. F. R., Veiga, Á., & Zilberman, E.**
   (2021). Forecasting Inflation in a Data-Rich Environment: The Benefits of
   Machine Learning Methods. *Journal of Business & Economic Statistics*,
