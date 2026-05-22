@@ -183,11 +183,33 @@ All auto-install via `00_setup.R` and the script headers.
 - **Goulet Coulombe, P.** (2025). Time-Varying Parameters as Ridge Regressions.
   *International Journal of Forecasting*, 41(3), 982–1002.
   https://doi.org/10.1016/j.ijforecast.2024.08.006
+<<<<<<< HEAD
   (Replication code: github.com/hugocout/Replication-codes-for-Time-Varying-Parameters-as-Ridge-Regressions)
 - **Medeiros, M. C., Vasconcelos, G. F. R., Veiga, Á., & Zilberman, E.** (2021).
   Forecasting Inflation in a Data-Rich Environment: The Benefits of Machine
   Learning Methods. *Journal of Business & Economic Statistics*, 39(1), 98–119.
   (Code: github.com/gabrielrvsc/ForecastingInflation)
+=======
+  - Replication code:
+    github.com/hugocout/Replication-codes-for-Time-Varying-Parameters-as-Ridge-Regressions
+
+- **Caldeira, J. F.** (2016). Predicting the yield curve using forecast combinations.
+  *Computational Statistics & Data Analysis, Volume 100, 79-98.
+  https://doi.org/10.1016/j.csda.2014.05.008
+
+- **Medeiros, M. C., Vasconcelos, G. F. R., Veiga, Á., & Zilberman, E.**
+  (2021). Forecasting Inflation in a Data-Rich Environment: The Benefits of
+  Machine Learning Methods. *Journal of Business & Economic Statistics*,
+  39(1), 98–119. https://doi.org/10.1080/07350015.2019.1637745
+  - Code: github.com/gabrielrvsc/ForecastingInflation
+
+- **Hansen, P. R., Lunde, A., & Nason, J. M.** (2011). The Model Confidence
+  Set. *Econometrica*, 79(2), 453–497.
+
+- **Giacomini, R. & White, H.** (2006). Tests of Conditional Predictive
+  Ability. *Econometrica*, 74(6), 1545–1578.
+
+>>>>>>> d7625736f9bf924ff11f59316f55c31ef315fc63
 - **McCracken, M. W., & Ng, S.** (2016). FRED-MD: A Monthly Database for
   Macroeconomic Research. *Journal of Business & Economic Statistics*, 34(4),
   574–589.
