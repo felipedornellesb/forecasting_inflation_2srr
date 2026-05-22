@@ -3,7 +3,7 @@
 #
 # Supplementary analysis script. Reads existing forecasts/betas and generates
 # four additional outputs that the original 04_analysis.R does not produce in
-# the form the thesis requires:
+# the form required here:
 #
 #   (A) P2b: TVP-cases relative performance against the AR benchmark (not RW).
 #   (B) P7v2: 2SRR-FAVAR against the 3 best Medeiros models per horizon, with
@@ -20,12 +20,12 @@
 # ==============================================================================
 
 cat("== 04_v2_analysis.R ==\n\n")
-setwd("~/tcc/forecasting_inflation_2srr")
+# Run this script from the project root directory.
 source("00_prog/00_setup.R")
 
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(ggplot2); library(scales)
-  library(gridExtra); library(reshape2); library(xtable)
+  library(gridExtra); library(reshape2)
 })
 has_patchwork <- requireNamespace("patchwork", quietly = TRUE)
 if (has_patchwork) library(patchwork)
@@ -48,14 +48,9 @@ save_fig <- function(plt, fname, width = 9, height = 5) {
   cat("  [fig]", pdf_path, "\n")
   invisible(plt)
 }
-save_tbl <- function(df, fname, latex_caption = NULL) {
+save_tbl <- function(df, fname, ...) {
   write.csv(df, file.path(TAB_DIR, paste0(fname, ".csv")), row.names = FALSE)
   cat("  [tbl]", file.path(TAB_DIR, paste0(fname, ".csv")), "\n")
-  if (!is.null(latex_caption)) {
-    sink(file.path(TAB_DIR, paste0(fname, ".tex")))
-    print(xtable(df, caption = latex_caption), include.rownames = FALSE)
-    sink()
-  }
 }
 
 # ---------------------------------------------------------------------------
@@ -366,62 +361,67 @@ benchmarks_dm <- c(intersect(c("Ridge", "LASSO", "ElNET", "AdaLASSO",
                               names(fc_all)),
                     paste0("RidgeStep1_", names(fc_ridge_step1)))
 
-dm_rows <- list()
-ref_case <- "FAVAR"
-for (h in horizons) {
-  if (h > ncol(fc_2srr[[ref_case]])) next
-  y_h <- yout[, h]
-  f_ref <- fc_2srr[[ref_case]][, h]
-  rmse_ref <- rmse_fn(y_h, f_ref)
-  for (bn in benchmarks_dm) {
-    M <- if (startsWith(bn, "RidgeStep1_"))
-            fc_ridge_step1[[sub("RidgeStep1_", "", bn)]]
-          else fc_all[[bn]]
-    if (is.null(M) || h > ncol(M)) next
-    f_bn <- M[, h]
-    dm <- dm_safe(y_h, f_ref, f_bn, h)
-    # Sign: TRUE if 2SRR-FAVAR has lower RMSE
-    rmse_bn <- rmse_fn(y_h, f_bn)
-    dm_rows[[length(dm_rows) + 1]] <- data.frame(
-      h = h, ref = paste0("2SRR-", ref_case), benchmark = bn,
-      RMSE_ref = round(rmse_ref, 4),
-      RMSE_bn  = round(rmse_bn,  4),
-      DM_stat  = round(dm$stat, 3),
-      DM_p     = round(dm$p,    4),
-      ref_wins = rmse_ref < rmse_bn)
+# Loop over BOTH 2SRR references: "AR" is the championed spec; "FAVAR" kept for
+# continuity with the earlier run. signed_p sign FIXED so GREEN = the 2SRR
+# reference is more accurate (previously inverted relative to the legend).
+for (ref_case in c("AR", "FAVAR")) {
+  if (is.null(fc_2srr[[ref_case]])) next
+  dm_rows <- list()
+  for (h in horizons) {
+    if (h > ncol(fc_2srr[[ref_case]])) next
+    y_h <- yout[, h]
+    f_ref <- fc_2srr[[ref_case]][, h]
+    rmse_ref <- rmse_fn(y_h, f_ref)
+    for (bn in benchmarks_dm) {
+      M <- if (startsWith(bn, "RidgeStep1_"))
+              fc_ridge_step1[[sub("RidgeStep1_", "", bn)]]
+            else fc_all[[bn]]
+      if (is.null(M) || h > ncol(M)) next
+      f_bn <- M[, h]
+      dm <- dm_safe(y_h, f_ref, f_bn, h)
+      rmse_bn <- rmse_fn(y_h, f_bn)
+      dm_rows[[length(dm_rows) + 1]] <- data.frame(
+        h = h, ref = paste0("2SRR-", ref_case), benchmark = bn,
+        RMSE_ref = round(rmse_ref, 4),
+        RMSE_bn  = round(rmse_bn,  4),
+        DM_stat  = round(dm$stat, 3),
+        DM_p     = round(dm$p,    4),
+        ref_wins = rmse_ref < rmse_bn)
+    }
   }
+  dm_df <- do.call(rbind, dm_rows)
+  save_tbl(dm_df, sprintf("P_DM_2SRR_%s_vs_all", ref_case),
+           latex_caption = sprintf("Diebold-Mariano test: 2SRR-%s vs all benchmark models (two-sided)",
+                                    ref_case))
+
+  # DM p-value heatmap. GREEN (negative) = 2SRR ref more accurate; RED = benchmark.
+  dm_df$signed_p <- ifelse(dm_df$ref_wins, -dm_df$DM_p, dm_df$DM_p)
+  p_dm <- ggplot(dm_df, aes(x = factor(h), y = benchmark,
+                              fill = pmin(pmax(signed_p, -0.5), 0.5))) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = sprintf("%.3f", DM_p)), size = 3) +
+    scale_fill_gradient2(midpoint = 0,
+                          low = "darkgreen", mid = "white", high = "darkred",
+                          limits = c(-0.5, 0.5), name = "Signed p-value") +
+    labs(title = sprintf("Diebold-Mariano p-values: 2SRR-%s vs each benchmark", ref_case),
+          subtitle = sprintf("Green = 2SRR-%s has lower RMSE; red = benchmark has lower RMSE", ref_case),
+          x = "Horizon (h)", y = "Benchmark") +
+    theme_minimal(base_size = 10)
+  save_fig(p_dm, sprintf("P_DM_2SRR_%s_heatmap", ref_case), 9, 6)
+
+  # Summary of significant DM rejections
+  dm_signif <- dm_df %>%
+    group_by(h) %>%
+    summarise(
+      n_total       = n(),
+      n_p_below_10  = sum(DM_p < 0.10, na.rm = TRUE),
+      n_2srr_wins_signif = sum(DM_p < 0.10 & ref_wins,  na.rm = TRUE),
+      n_2srr_loses_signif = sum(DM_p < 0.10 & !ref_wins, na.rm = TRUE),
+      .groups = "drop")
+  save_tbl(as.data.frame(dm_signif), sprintf("P_DM_%s_summary", ref_case),
+           latex_caption = sprintf("Diebold-Mariano significant rejections summary, 2SRR-%s (alpha=0.10)",
+                                    ref_case))
 }
-dm_df <- do.call(rbind, dm_rows)
-save_tbl(dm_df, "P_DM_2SRR_FAVAR_vs_all",
-         latex_caption = sprintf("Diebold-Mariano test: 2SRR-%s vs all benchmark models (two-sided)",
-                                  ref_case))
-
-# DM p-value heatmap
-dm_df$signed_p <- ifelse(dm_df$ref_wins,  dm_df$DM_p, -dm_df$DM_p)
-p_dm <- ggplot(dm_df, aes(x = factor(h), y = benchmark,
-                            fill = pmin(pmax(signed_p, -0.5), 0.5))) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = sprintf("%.3f", DM_p)), size = 3) +
-  scale_fill_gradient2(midpoint = 0,
-                        low = "darkgreen", mid = "white", high = "darkred",
-                        limits = c(-0.5, 0.5), name = "Signed p-value") +
-  labs(title = "Diebold-Mariano p-values: 2SRR-FAVAR vs each benchmark",
-        subtitle = "Green = 2SRR-FAVAR has lower RMSE; Red = benchmark has lower RMSE",
-        x = "Horizon (h)", y = "Benchmark") +
-  theme_minimal(base_size = 10)
-save_fig(p_dm, "P_DM_2SRR_FAVAR_heatmap", 9, 6)
-
-# Summary of significant DM rejections
-dm_signif <- dm_df %>%
-  group_by(h) %>%
-  summarise(
-    n_total       = n(),
-    n_p_below_10  = sum(DM_p < 0.10, na.rm = TRUE),
-    n_2srr_wins_signif = sum(DM_p < 0.10 & ref_wins,  na.rm = TRUE),
-    n_2srr_loses_signif = sum(DM_p < 0.10 & !ref_wins, na.rm = TRUE),
-    .groups = "drop")
-save_tbl(as.data.frame(dm_signif), "P_DM_summary",
-         latex_caption = "Diebold-Mariano significant rejections summary (alpha=0.10)")
 
 cat("\n== 04_v2_analysis.R DONE ==\n")
 cat(sprintf("All outputs in: %s\n", OUT_DIR))

@@ -1,6 +1,6 @@
 ============================================================================== 
   FINAL NARRATIVE — 2SRR (Coulombe IJF 2025) on FRED-MD
-  Generated: 2026-05-17 04:52:35.984511 | OOS: 2010-07 to 2025-06 | 180 windows
+  Generated: 2026-05-22 12:53:25.580115 | OOS: 2010-07 to 2025-06 | 180 windows
 ============================================================================== 
 
 1. PERFORMANCE RELATIVE TO RANDOM WALK
@@ -16,7 +16,7 @@
    h= 6 best case: TVP-AR (ratio=0.615)
    h=12 best case: TVP-Factor (ratio=0.617)
 
-3. STABILITY / VARIATION OF BETAS PER HORIZON (ADVISOR REQUEST)
+3. STABILITY / VARIATION OF BETAS PER HORIZON
    Trajectories in P3_betas_trajectory_<case>_h<H>.pdf.
    Statistics in P3_betas_stats_<case>_h<H>.csv.
    Key question: do betas vary enough to justify TVP?
@@ -71,8 +71,10 @@
    Detail in P0b_yout_audit.csv and P0b_yout_4h_combined.pdf.
 
 12. ECONOMETRIC VALIDATION (audit)
-   12 OK | 0 WARN | 0 FAIL (total 12 items)
+   11 OK | 0 WARN | 0 FAIL (total 12 items)
    Detail in P13b_econometric_validation.csv.
+   Informational signals (by-design, no action required):
+     V7 [INFO]: CV lambda at upper grid edge (implicit-regularization signal) -- max % windows at top: 89.4% (expected; original Coulombe grid)
 
 11. GIACOMINI-WHITE (2006) — CONDITIONAL predictive ability
    P13_GW_test.csv | heatmap P13_GW_heatmap.pdf
@@ -81,7 +83,7 @@
    h= 3: lowest p-value against 'CSR' (p=0.2308)
    h= 6: lowest p-value against 'RidgeStep1_AR' (p=0.0043)
    h=12: lowest p-value against 'AR' (p=0.0704)
-   ARGUMENT (defense vs Hudson): GW is the CORRECT test for NON-nested
+   Note: GW is the CORRECT test for NON-nested
    models (our case: 2SRR vs LASSO/RF/Bagging/etc.) and when parameters
    are re-estimated in rolling fashion. Unlike DM, GW conditions on
    past information, being more robust.

@@ -1,11 +1,11 @@
 # ==============================================================================
 # 04_analysis.R
 #
-# Consolidated thesis analysis: 2SRR (Coulombe 2025) vs Ridge vs Medeiros.
+# Consolidated analysis: 2SRR (Coulombe 2025) vs Ridge vs Medeiros.
 # Replaces legacy scripts 04 (analysis) and 05 (descriptive) with a single
 # unified pipeline.
 #
-# COVERS THE 10 ADVISOR (HUDSON) REQUESTS:
+# Analyses produced:
 #   1. Descriptive pre-forecasting analysis of TVP betas (full in-sample)
 #   2. Three TVP specifications compared (TVP-AR, TVP-Factor, TVP-FAVAR)
 #   3. Betas WITHIN each horizon (h=1, 3, 6, 12) — trajectories, signs
@@ -35,12 +35,12 @@
 # OUTPUTS:
 #   40_results/run_final_<timestamp>/
 #     figures/ : PDFs + interactive HTMLs (plotly)
-#     tables/  : CSVs + LaTeX
+#     tables/  : CSVs
 #     final_narrative.txt
 #
 # Robust to missing inputs: each section checks file.exists before processing.
 # ==============================================================================
-setwd("~/tcc/forecasting_inflation_2srr")
+# Run this script from the project root directory.
 cat("== 04_analysis.R ==\n\n")
 source("00_prog/00_setup.R")
 
@@ -56,7 +56,7 @@ for (p in extra_pkgs) {
 }
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(ggplot2); library(scales)
-  library(gridExtra); library(reshape2); library(xtable)
+  library(gridExtra); library(reshape2)
 })
 has_plotly   <- requireNamespace("plotly", quietly = TRUE)
 has_patchwork <- requireNamespace("patchwork", quietly = TRUE)
@@ -93,18 +93,10 @@ save_fig <- function(plt, fname, width = 8, height = 6) {
   if (ok) cat("  [fig]", pdf_path, "\n")
   invisible(plt)
 }
-save_tbl <- function(df, fname, latex_caption = NULL, latex_label = NULL) {
+save_tbl <- function(df, fname, ...) {
   csv_path <- file.path(TAB_DIR, paste0(fname, ".csv"))
   write.csv(df, csv_path, row.names = FALSE)
-  cat("  [tbl csv]", csv_path, "\n")
-  if (!is.null(latex_caption)) {
-    tex_path <- file.path(TAB_DIR, paste0(fname, ".tex"))
-    sink(tex_path)
-    print(xtable(df, caption = latex_caption, label = latex_label),
-          include.rownames = FALSE)
-    sink()
-    cat("  [tbl tex]", tex_path, "\n")
-  }
+  cat("  [tbl]", csv_path, "\n")
   print(df, row.names = FALSE)
 }
 
@@ -221,7 +213,7 @@ y_oos_monthly  <- y_raw_global[(tau_global + 1):(tau_global + n_oos)]
 
 
 # ============================================================================ #
-# SECTION 0b: AUDIT OF THE REALIZED SERIES (advisor request)
+# SECTION 0b: AUDIT OF THE REALIZED SERIES
 #
 # Ensures yout is correctly aligned with the raw y_t series. For each
 # (i, h), yout[i,h] MUST equal sum_{j=1..h} y_{tau+i-1+j} (h-step cumulative
@@ -396,7 +388,7 @@ if (length(fc_2srr) > 0) {
 # PART 3: Betas WITHIN each horizon (h=1, 3, 6, 12)
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 3: TVP beta trajectories per horizon (KEY ADVISOR REQUEST)\n")
+cat("PART 3: TVP beta trajectories per horizon\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 # Helper: extract a K x T_oos matrix for a (case, horizon).
@@ -470,6 +462,9 @@ if (length(betas_2srr) > 0) {
         sub
       )
       df_long <- pivot_longer(df_p, -date, names_to = "var", values_to = "beta")
+      # Bridge windows that fell back to static ridge (no TVP betas -> NA) so the
+      # line connects instead of breaking. (cf. 05_article_figures.R, FIG3.)
+      df_long <- df_long[!is.na(df_long$beta), ]
       p <- ggplot(df_long, aes(date, beta, color = var)) +
         geom_line(linewidth = 0.8) +
         geom_hline(yintercept = 0, linetype = 3) +
@@ -493,6 +488,7 @@ if (length(betas_2srr) > 0) {
       sub <- mat[, st$var[top_id], drop = FALSE]
       df_p <- data.frame(date = oos_dates[1:nrow(sub)], sub)
       df_long <- pivot_longer(df_p, -date, names_to = "var", values_to = "beta")
+      df_long <- df_long[!is.na(df_long$beta), ]   # bridge ridge-fallback windows
       plots[[hlab]] <- ggplot(df_long, aes(date, beta, color = var)) +
         geom_line(linewidth = 0.7) +
         geom_hline(yintercept = 0, linetype = 3) +
@@ -605,7 +601,7 @@ if (length(betas_2srr) > 0) {
 
   # P5b: % of windows with lambda saturated at the grid boundary — diagnoses V7.
   # Match the grid used in 03_forecast_2srr.R: exp(linspace(-2, 12, 15)).
-  # This high boundary-hit rate is THE CENTRAL EMPIRICAL FACT of the thesis:
+  # This high boundary-hit rate is the central empirical finding:
   # CV wants to push lambda upward, but the original Coulombe grid acts as an
   # implicit regularization ceiling that prevents the TVP structure from
   # collapsing into a constant Ridge.
@@ -1266,7 +1262,7 @@ if (length(betas_2srr) > 0) {
 #      test (Hansen et al., 2011, Econometrica).
 #   3. Report the surviving subset for alpha = 0.10 and 0.25.
 #
-# DEFENSE: "Models inside the MCS are indistinguishable from the best —
+# Note: "Models inside the MCS are indistinguishable from the best —
 # 2SRR-FAVAR stays in the MCS for h=12, validating it."
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
@@ -1401,7 +1397,7 @@ if (!has_mcs) {
 #   q = dim(h_t). Here we use h_t = (1, d_{t-1})' (q=2) — the "standard" GW.
 #   Omega_hat = HAC (Newey-West) with bandwidth h-1 for horizon h.
 #
-# DEFENSE: "GW is the right test for our setting (non-nested models, rolling
+# Note: "GW is the right test for our setting (non-nested models, rolling
 # re-estimation). Low p-values = 2SRR-FAVAR has conditional predictive ability
 # superior to the benchmark."
 # ============================================================================ #
@@ -1625,7 +1621,7 @@ if (!is.null(lg) && nrow(lg) > 0) {
   hit_top <- max(lg$on_max_pct, na.rm = TRUE)
   # NOTE: under the original Coulombe grid (the one we adopt) the CV is
   # EXPECTED to push lambda toward the upper edge in monthly data. This is
-  # the implicit-regularization mechanism that the thesis argues is
+  # the implicit-regularization mechanism that the study argues is
   # beneficial. We therefore flag this as INFO, not a problem.
   s7 <- "INFO"
   log_v("V7", "CV lambda at upper grid edge (implicit-regularization signal)",
@@ -1747,7 +1743,7 @@ if (exists("tvp_compare_df")) {
                 bb$h[i], bb$case[i], bb$ratio[i]))
   }
 }
-cat("\n3. STABILITY / VARIATION OF BETAS PER HORIZON (ADVISOR REQUEST)\n")
+cat("\n3. STABILITY / VARIATION OF BETAS PER HORIZON\n")
 cat("   Trajectories in P3_betas_trajectory_<case>_h<H>.pdf.\n")
 cat("   Statistics in P3_betas_stats_<case>_h<H>.csv.\n")
 cat("   Key question: do betas vary enough to justify TVP?\n")
@@ -1878,7 +1874,7 @@ if (exists("gw_df")) {
                   h, best_bench, min(rr$GW_p, na.rm = TRUE)))
     }
   }
-  cat("   ARGUMENT (defense vs Hudson): GW is the CORRECT test for NON-nested\n")
+  cat("   Note: GW is the CORRECT test for NON-nested\n")
   cat("   models (our case: 2SRR vs LASSO/RF/Bagging/etc.) and when parameters\n")
   cat("   are re-estimated in rolling fashion. Unlike DM, GW conditions on\n")
   cat("   past information, being more robust.\n")
@@ -1888,11 +1884,11 @@ sink()
 cat("\n", readLines(narr_path), sep = "\n")
 
 # ============================================================================ #
-# PART 14b: ADDITIONAL ECONOMETRIC TESTS — defending the
-#           "restricted grid wins" thesis
+# PART 14b: ADDITIONAL ECONOMETRIC TESTS — supporting the
+#           "restricted grid wins" finding
 #
 # Three additional metrics that directly support the central empirical
-# argument of the thesis: that Coulombe's original CV grid acts as an
+# argument that Coulombe's original CV grid acts as an
 # implicit regularization ceiling, preserving useful temporal parameter
 # variation that an "uncapped" search collapses into a constant Ridge.
 #
@@ -2060,6 +2056,5 @@ cat(strrep("=", 78), "\n", sep = "")
 cat(sprintf("  Folder: %s\n", OUT_DIR))
 cat(sprintf("  PDFs : %d\n", length(list.files(FIG_DIR, "\\.pdf$"))))
 cat(sprintf("  CSVs : %d\n", length(list.files(TAB_DIR, "\\.csv$"))))
-cat(sprintf("  TEX  : %d\n", length(list.files(TAB_DIR, "\\.tex$"))))
 cat(sprintf("  HTML : %d\n", length(list.files(FIG_DIR, "\\.html$"))))
 cat("\n== 04_analysis.R DONE ==\n")

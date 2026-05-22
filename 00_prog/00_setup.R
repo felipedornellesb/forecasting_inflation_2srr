@@ -24,7 +24,7 @@ for (d in c(DIR_DATA, DIR_COULOMBE, DIR_MEDEIROS, DIR_ADAPTED,
 
 # -- Packages ------------------------------------------------------------------
 pkgs <- c("glmnet", "pracma", "randomForest",
-          "forecast", "lmtest", "sandwich", "ggplot2", "reshape2", "xtable")
+          "forecast", "lmtest", "sandwich", "ggplot2", "reshape2")
 new_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
 if (length(new_pkgs)) install.packages(new_pkgs, repos = "https://cran.r-project.org")
 suppressPackageStartupMessages(invisible(lapply(pkgs, library, character.only = TRUE)))
