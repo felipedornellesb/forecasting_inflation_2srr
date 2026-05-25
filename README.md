@@ -8,7 +8,7 @@ Forest, Bagging, Factor, Target Factor, Complete Subset Regression, AR and
 AR-BIC** — from the Medeiros et al. (*JBES*, 2021) framework.
 
 Reproducible R pipeline: from the FRED-MD panel to forecasts, formal
-predictive-accuracy tests, and publication-ready figures and tables.
+predictive-accuracy tests, and figures plus CSV tables.
 
 ---
 
@@ -19,12 +19,21 @@ predictive-accuracy tests, and publication-ready figures and tables.
 02_forecast_medeiros.R -> 12 econometric / ML benchmarks (Medeiros et al., 2021)
 03_forecast_2srr.R     -> 2SRR in 3 TVP specifications (AR, Factor, FAVAR)
 04_analysis.R          -> RMSE, Diebold-Mariano, Giacomini-White, Model Confidence Set,
-                          Mincer-Zarnowitz; beta trajectories; figures + CSV tables
-05_figures_tables.R    -> publication-ready figures (PNG/PDF) + Word (.docx) tables
+                          Mincer-Zarnowitz (Newey-West HAC); beta trajectories; figures + CSV tables
+05_article_figures.R   -> publication figures (PNG/PDF), AR as the benchmark
 ```
 
-Run the scripts in order. `04_analysis.R` is robust to missing inputs — any
-benchmark model whose forecast file does not exist is silently skipped.
+Auxiliary scripts (optional, read-only verification — not required to reproduce
+the results):
+
+```
+05b_article_figures_AR.R -> AR-benchmark figures: DM (ref 2SRR-AR), CSFE vs AR, GW vs AR
+06_test_gwcsfe.R         -> stand-alone Giacomini-White + CSFE check
+07_test_mz.R             -> stand-alone Mincer-Zarnowitz check (OLS vs Newey-West HAC)
+```
+
+Run the numbered scripts in order. `04_analysis.R` is robust to missing inputs —
+any benchmark model whose forecast file does not exist is silently skipped.
 
 ---
 
@@ -38,7 +47,7 @@ source("00_prog/01_data_prep.R")         # build yout.rda and rw.rda (180 window
 source("00_prog/02_forecast_medeiros.R") # 12 benchmark models (rolling window)
 source("00_prog/03_forecast_2srr.R")     # 2SRR via coulombe_fast (parallel over windows)
 source("00_prog/04_analysis.R")          # tests, figures and CSV tables
-source("00_prog/05_figures_tables.R")    # final figures (PNG/PDF) and Word tables
+source("00_prog/05_article_figures.R")   # publication figures (PNG/PDF)
 ```
 
 Prerequisite: place `data.rda` in `10_data/`. Target variable: `CPIAUCSL`.
@@ -84,7 +93,7 @@ on this grid often saturates at the maximum value for monthly data, yet
 empirical testing shows that an **expanded** grid (allowing larger λ) *degrades*
 out-of-sample accuracy. The restricted grid acts as an implicit regularization
 that prevents cross-validation from eliminating the time-varying structure,
-preserving the residual parameter variation that lets 2SRR outperform a
+preserving the residual parameter variation that lets 2SRR keep pace with a
 constant-parameter ridge.
 
 ### Three TVP specifications
@@ -108,6 +117,16 @@ OOS from **Jul/2010 to Jun/2025**, horizons `h ∈ {1, 3, 6, 12}`. The benchmark
 use a rolling window fixed at 606 observations (Medeiros `rolling_window.R`);
 2SRR uses an expanding window starting at the same 606-observation training set.
 
+### Mincer-Zarnowitz with a HAC covariance
+
+The Mincer-Zarnowitz joint test (`04_analysis.R`, PART 14b) regresses realized
+cumulative inflation on each forecast and tests `α = 0` and `β = 1` jointly.
+Because the direct multi-step forecasts overlap by `h − 1` months, the residuals
+are MA(h − 1)-autocorrelated; the joint Wald therefore uses a Newey-West HAC
+covariance with lag `h − 1` (`sandwich::NeweyWest`), reducing to the
+heteroskedasticity-robust case at `h = 1`. Ordinary OLS standard errors would
+over-reject at long horizons.
+
 ### Parallelization
 
 `parallel::makeCluster(N_CORES, type = "PSOCK")` in `03` parallelizes the 12
@@ -124,7 +143,10 @@ jobs (3 cases × 4 horizons) per window. Default: `detectCores() - 1`.
   02_forecast_medeiros.R   12 benchmark models
   03_forecast_2srr.R       3 TVP cases x 4 horizons x 180 windows
   04_analysis.R            Tests, figures, CSV tables
-  05_figures_tables.R      Publication figures (PNG/PDF) and Word tables
+  05_article_figures.R     Publication figures (PNG/PDF), AR as the benchmark
+  05b_article_figures_AR.R AR-benchmark figures (DM ref 2SRR-AR, CSFE vs AR, GW vs AR)
+  06_test_gwcsfe.R         Stand-alone Giacomini-White + CSFE check
+  07_test_mz.R             Stand-alone Mincer-Zarnowitz check (OLS vs Newey-West HAC)
 
 10_data/                data.rda (FRED-MD, 786 obs x 117 vars + date) — not tracked
 
@@ -135,7 +157,9 @@ jobs (3 cases × 4 horizons) per window. Default: `detectCores() - 1`.
 
 30_output/                forecasts/ and betas/ (.rda) — not tracked
 
-40_results/               Figures (PDF/PNG) and CSV tables of the most recent run
+40_results/               Figures (PDF/PNG) and CSV tables of the most recent run.
+                          Interactive HTML widgets, run logs (.txt) and intermediate
+                          LaTeX exports are git-ignored.
 ```
 
 ---
@@ -172,9 +196,9 @@ external code, because `EM_sw()` calls `factor(X, n_fac = n)`, which clashes wit
 ## Required packages
 
 `glmnet`, `pracma`, `randomForest`, `forecast`, `lmtest`, `sandwich`,
-`ggplot2`, `reshape2`, `HDeconometrics` (GitHub), `rugarch`, `fGarch`, `dplyr`,
-`tidyr`, `patchwork`, `scales`, `RColorBrewer`, `gridExtra`, `MCS`, `flextable`.
-All auto-install via `00_setup.R` and the script headers.
+`ggplot2`, `reshape2`, `HDeconometrics` (GitHub), `dplyr`, `tidyr`, `patchwork`,
+`scales`, `RColorBrewer`, `gridExtra`, `MCS`, `plotly`. All auto-install via
+`00_setup.R` and the script headers.
 
 ---
 
@@ -183,42 +207,28 @@ All auto-install via `00_setup.R` and the script headers.
 - **Goulet Coulombe, P.** (2025). Time-Varying Parameters as Ridge Regressions.
   *International Journal of Forecasting*, 41(3), 982–1002.
   https://doi.org/10.1016/j.ijforecast.2024.08.006
-<<<<<<< HEAD
   (Replication code: github.com/hugocout/Replication-codes-for-Time-Varying-Parameters-as-Ridge-Regressions)
 - **Medeiros, M. C., Vasconcelos, G. F. R., Veiga, Á., & Zilberman, E.** (2021).
   Forecasting Inflation in a Data-Rich Environment: The Benefits of Machine
   Learning Methods. *Journal of Business & Economic Statistics*, 39(1), 98–119.
+  https://doi.org/10.1080/07350015.2019.1637745
   (Code: github.com/gabrielrvsc/ForecastingInflation)
-=======
-  - Replication code:
-    github.com/hugocout/Replication-codes-for-Time-Varying-Parameters-as-Ridge-Regressions
-
-- **Caldeira, J. F.** (2016). Predicting the yield curve using forecast combinations.
-  *Computational Statistics & Data Analysis, Volume 100, 79-98.
-  https://doi.org/10.1016/j.csda.2014.05.008
-
-- **Medeiros, M. C., Vasconcelos, G. F. R., Veiga, Á., & Zilberman, E.**
-  (2021). Forecasting Inflation in a Data-Rich Environment: The Benefits of
-  Machine Learning Methods. *Journal of Business & Economic Statistics*,
-  39(1), 98–119. https://doi.org/10.1080/07350015.2019.1637745
-  - Code: github.com/gabrielrvsc/ForecastingInflation
-
-- **Hansen, P. R., Lunde, A., & Nason, J. M.** (2011). The Model Confidence
-  Set. *Econometrica*, 79(2), 453–497.
-
-- **Giacomini, R. & White, H.** (2006). Tests of Conditional Predictive
-  Ability. *Econometrica*, 74(6), 1545–1578.
-
->>>>>>> d7625736f9bf924ff11f59316f55c31ef315fc63
 - **McCracken, M. W., & Ng, S.** (2016). FRED-MD: A Monthly Database for
   Macroeconomic Research. *Journal of Business & Economic Statistics*, 34(4),
   574–589.
-- **Hansen, P. R., Lunde, A., & Nason, J. M.** (2011). The Model Confidence Set.
-  *Econometrica*, 79(2), 453–497.
-- **Giacomini, R., & White, H.** (2006). Tests of Conditional Predictive
-  Ability. *Econometrica*, 74(6), 1545–1578.
 - **De Mol, C., Giannone, D., & Reichlin, L.** (2008). Forecasting Using a Large
   Number of Predictors. *Journal of Econometrics*, 146(2), 318–328.
 - **Bergmeir, C., Hyndman, R. J., & Koo, B.** (2018). A Note on the Validity of
   Cross-Validation for Evaluating Autoregressive Time Series Prediction.
   *Computational Statistics & Data Analysis*, 120, 70–83.
+- **Hansen, P. R., Lunde, A., & Nason, J. M.** (2011). The Model Confidence Set.
+  *Econometrica*, 79(2), 453–497.
+- **Giacomini, R., & White, H.** (2006). Tests of Conditional Predictive
+  Ability. *Econometrica*, 74(6), 1545–1578.
+- **Diebold, F. X., & Mariano, R. S.** (1995). Comparing Predictive Accuracy.
+  *Journal of Business & Economic Statistics*, 13(3), 253–263.
+- **Mincer, J., & Zarnowitz, V.** (1969). The Evaluation of Economic Forecasts.
+  In: *Economic Forecasts and Expectations*. New York: NBER, 3–46.
+- **Newey, W. K., & West, K. D.** (1987). A Simple, Positive Semi-Definite,
+  Heteroskedasticity and Autocorrelation Consistent Covariance Matrix.
+  *Econometrica*, 55(3), 703–708.

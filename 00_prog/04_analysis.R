@@ -100,6 +100,22 @@ save_tbl <- function(df, fname, ...) {
   print(df, row.names = FALSE)
 }
 
+# Broken-line diagnostic: a few windows fall back to a static ridge when the
+# time-varying optimizer does not converge (no TVP coefficients there), so the
+# trajectory/lambda lines break. Rather than hide the gap, shade those windows
+# and add an explanatory caption. `na_mask` is a per-window logical vector.
+NA_FALLBACK_NOTE <- paste0(
+  "Shaded bands mark windows where the time-varying optimizer did not converge ",
+  "and a static-ridge fallback was used (no time-varying coefficients there).")
+na_shade_layers <- function(dates, na_mask, fill = "grey55", alpha = 0.30) {
+  na_mask <- as.logical(na_mask); na_mask[is.na(na_mask)] <- FALSE
+  if (!any(na_mask)) return(list())
+  r <- rle(na_mask); ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1L
+  lapply(which(r$values), function(i)
+    annotate("rect", xmin = dates[starts[i]] - 15, xmax = dates[ends[i]] + 15,
+             ymin = -Inf, ymax = Inf, fill = fill, alpha = alpha))
+}
+
 # Helper: combine 4 ggplots (one per horizon) into a 2x2 panel and save.
 # Extra output: PDF. Also prints to the console (each plot individually).
 save_combined_4h <- function(plots_list, fname, title = NULL,
@@ -457,21 +473,19 @@ if (length(betas_2srr) > 0) {
       top_n  <- min(6, ncol(mat))
       top_id <- order(-st$sd)[1:top_n]
       sub    <- mat[, st$var[top_id], drop = FALSE]
-      df_p   <- data.frame(
-        date = oos_dates[1:nrow(sub)],
-        sub
-      )
+      dts    <- oos_dates[1:nrow(sub)]
+      na_w   <- apply(sub, 1, function(r) all(is.na(r)))   # static-ridge fallback windows
+      df_p   <- data.frame(date = dts, sub)
       df_long <- pivot_longer(df_p, -date, names_to = "var", values_to = "beta")
-      # Bridge windows that fell back to static ridge (no TVP betas -> NA) so the
-      # line connects instead of breaking. (cf. 05_article_figures.R, FIG3.)
-      df_long <- df_long[!is.na(df_long$beta), ]
       p <- ggplot(df_long, aes(date, beta, color = var)) +
-        geom_line(linewidth = 0.8) +
+        na_shade_layers(dts, na_w) +
+        geom_line(linewidth = 0.8, na.rm = TRUE) +
         geom_hline(yintercept = 0, linetype = 3) +
         labs(title = sprintf("TVP-%s, h=%d: top-%d betas (by sd)",
                               case, h, top_n),
-              x = "", y = "beta_T (last in-sample beta)") +
-        theme_minimal()
+              x = "", y = "beta_T (last in-sample beta)",
+              caption = if (any(na_w)) NA_FALLBACK_NOTE else NULL) +
+        theme_minimal() + theme(plot.caption = element_text(size = 7, hjust = 0))
       save_fig(p, sprintf("P3_betas_trajectory_%s_h%02d", case, h), 9, 5)
     }
   }
@@ -486,11 +500,13 @@ if (length(betas_2srr) > 0) {
       st  <- stats_betas(mat)
       top_id <- order(-st$sd)[1:min(4, ncol(mat))]
       sub <- mat[, st$var[top_id], drop = FALSE]
-      df_p <- data.frame(date = oos_dates[1:nrow(sub)], sub)
+      dts <- oos_dates[1:nrow(sub)]
+      na_w <- apply(sub, 1, function(r) all(is.na(r)))
+      df_p <- data.frame(date = dts, sub)
       df_long <- pivot_longer(df_p, -date, names_to = "var", values_to = "beta")
-      df_long <- df_long[!is.na(df_long$beta), ]   # bridge ridge-fallback windows
       plots[[hlab]] <- ggplot(df_long, aes(date, beta, color = var)) +
-        geom_line(linewidth = 0.7) +
+        na_shade_layers(dts, na_w) +
+        geom_line(linewidth = 0.7, na.rm = TRUE) +
         geom_hline(yintercept = 0, linetype = 3) +
         labs(title = sprintf("h=%d", h), x = "", y = "beta") +
         theme_minimal() + theme(legend.text = element_text(size = 7))
@@ -576,19 +592,19 @@ if (length(betas_2srr) > 0) {
       )
 
       # Trajectory plot
-      df_l <- data.frame(
-        date = oos_dates[1:length(l1)],
-        lambda_step1 = l1,
-        lambda_step4 = l4
-      )
+      dts  <- oos_dates[1:length(l1)]
+      na_w <- is.na(l1) | is.na(l4)
+      df_l <- data.frame(date = dts, lambda_step1 = l1, lambda_step4 = l4)
       df_l_long <- pivot_longer(df_l, -date, names_to = "step",
                                  values_to = "lambda")
       p <- ggplot(df_l_long, aes(date, log(lambda), color = step)) +
-        geom_line(linewidth = 0.8) +
+        na_shade_layers(dts, na_w) +
+        geom_line(linewidth = 0.8, na.rm = TRUE) +
         labs(title = sprintf("TVP-%s, h=%d: Step1 vs Step4 lambdas (log)",
                               case, h),
-              x = "", y = "log(lambda)") +
-        theme_minimal()
+              x = "", y = "log(lambda)",
+              caption = if (any(na_w)) NA_FALLBACK_NOTE else NULL) +
+        theme_minimal() + theme(plot.caption = element_text(size = 7, hjust = 0))
       save_fig(p, sprintf("P5_lambdas_%s_h%02d", case, h), 8, 4)
     }
   }
@@ -1185,10 +1201,13 @@ plot_beta_evol <- function(case, h, top_n = 4) {
   st <- stats_betas(mat); st <- st[order(-st$sd), ]
   top_id <- head(st$var, top_n)
   sub <- mat[, top_id, drop = FALSE]
-  df_p <- data.frame(date = oos_dates[1:nrow(sub)], sub, check.names = FALSE)
+  dts <- oos_dates[1:nrow(sub)]
+  na_w <- apply(sub, 1, function(r) all(is.na(r)))
+  df_p <- data.frame(date = dts, sub, check.names = FALSE)
   df_long <- pivot_longer(df_p, -date, names_to = "var", values_to = "beta")
   ggplot(df_long, aes(date, beta, color = var)) +
-    geom_line(linewidth = 0.65) +
+    na_shade_layers(dts, na_w) +
+    geom_line(linewidth = 0.65, na.rm = TRUE) +
     geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
     labs(title = sprintf("TVP-%s h=%d", case, h), x = "", y = "beta") +
     theme_minimal() + theme(legend.text = element_text(size = 6),
@@ -1909,13 +1928,28 @@ cat(strrep("=", 78), "\n", sep = "")
 
 # Mincer-Zarnowitz test: y_t = alpha + beta * f_t + eps_t.
 # Joint Wald H0: alpha=0 AND beta=1. Lower p-value => reject efficiency.
-mz_test <- function(y, f) {
+#
+# Direct h-step forecasts are built on windows that overlap by h-1 months, so
+# the MZ residuals eps_t inherit an MA(h-1) serial-correlation structure. Plain
+# OLS (homoskedastic) standard errors ignore that dependence and badly
+# UNDER-state the variance of (alpha, beta) at long horizons, inflating the
+# joint Wald and driving p_joint -> 0 for essentially every model at h=12
+# (a spurious, universal rejection). We therefore evaluate the joint Wald with a
+# Newey-West HAC covariance using lag = h-1 (the exact overlap length); at h=1
+# this collapses to a heteroskedasticity-robust (White) estimator. This is the
+# standard correction for forecast-evaluation regressions on overlapping
+# multi-step forecasts and is consistent with the HAC convention used for the
+# Giacomini-White test elsewhere in this script.
+mz_test <- function(y, f, h = 1) {
   ok <- complete.cases(y, f)
   if (sum(ok) < 30) return(list(alpha = NA, beta = NA, R2 = NA, p_joint = NA, n = sum(ok)))
   y_ <- y[ok]; f_ <- f[ok]
   m <- tryCatch(lm(y_ ~ f_), error = function(e) NULL)
   if (is.null(m)) return(list(alpha = NA, beta = NA, R2 = NA, p_joint = NA, n = length(y_)))
-  cf <- coef(m); vcv <- vcov(m)
+  cf <- coef(m)
+  vcv <- tryCatch(
+    sandwich::NeweyWest(m, lag = max(0, h - 1), prewhite = FALSE, adjust = TRUE),
+    error = function(e) vcov(m))
   R <- rbind(c(1, 0), c(0, 1)); r <- c(0, 1)
   w <- tryCatch({
     diff <- R %*% cf - r
@@ -1923,7 +1957,7 @@ mz_test <- function(y, f) {
   }, error = function(e) NA)
   list(alpha = cf[1], beta = cf[2],
        R2 = summary(m)$r.squared,
-       p_joint = if (is.na(w)) NA else 1 - pchisq(w, df = 2),
+       p_joint = if (is.na(w) || w < 0) NA else 1 - pchisq(w, df = 2),
        n = length(y_))
 }
 
@@ -1982,7 +2016,7 @@ for (mn in names(all_fc_for_tests)) {
     f_h <- M[, h]
     # Reference for directional test: lagged cumulative (h-step earlier)
     y_ref <- c(rep(NA_real_, h), y_h[seq_len(length(y_h) - h)])
-    mz <- mz_test(y_h, f_h)
+    mz <- mz_test(y_h, f_h, h)
     pt <- pt_test(y_h, f_h, y_ref = y_ref)
     mz_pt_rows[[length(mz_pt_rows) + 1]] <- data.frame(
       model = mn, h = h, n = mz$n,
