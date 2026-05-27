@@ -21,7 +21,7 @@
 #        evolution, and 4h combined panels (CSSED, rolling, lambdas)
 #  12. MCS — Model Confidence Set (Hansen, Lunde & Nason 2011)
 #  13. GW — Giacomini-White (2006) conditional predictive ability test
-#  13b. Econometric validation and consistency with Coulombe (PhD-level audit)
+#  13b. Econometric validation and consistency with Coulombe (audit)
 #  + SECTION 0b: Audit of the realized series (yout consistency across h)
 #
 # INPUTS:
@@ -1543,7 +1543,7 @@ if (length(gw_rows) > 0) {
 #  V12. Sensible forecast magnitudes vs realized (no explosion)
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 13b: ECONOMETRIC AND PAPER VALIDATION (PhD-level audit)\n")
+cat("PART 13b: ECONOMETRIC AND PAPER VALIDATION (audit)\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 audit_log <- list()

@@ -63,10 +63,11 @@ disp <- function(x) {
 }
 
 save_article_fig <- function(plt, fname, width = 9, height = 5.5) {
-  ggsave(file.path(OUT_FIG, paste0(fname, ".pdf")), plt, width = width, height = height)
+#  ggsave(file.path(OUT_FIG, paste0(fname, ".pdf")), plt, width = width, height = height)
   ggsave(file.path(OUT_FIG, paste0(fname, ".png")), plt, width = width, height = height,
          dpi = 300, bg = "white")
-  cat("  [fig]", fname, ".pdf / .png\n", sep = "")
+#  cat("  [fig]", fname, ".pdf / .png\n", sep = "")
+  cat("  [fig]", fname, ".png\n", sep = "")
 }
 
 rd <- function(folder, file) read.csv(file.path(folder, "tables", file),

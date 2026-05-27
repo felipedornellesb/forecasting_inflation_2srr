@@ -31,7 +31,7 @@ theme_article <- theme_minimal(base_size = 12) +
 save_article_fig <- function(plt, fname, width = 9, height = 5.5) {
   ggsave(file.path(OUT_FIG, paste0(fname, ".png")), plt, width = width, height = height,
          dpi = 150, bg = "white")
-  ggsave(file.path(OUT_FIG, paste0(fname, ".pdf")), plt, width = width, height = height)
+#  ggsave(file.path(OUT_FIG, paste0(fname, ".pdf")), plt, width = width, height = height)
   cat("  [fig]", fname, "\n")
 }
 ld_fc <- function(f) { e <- new.env(); load(file.path(DIR_FC, f), envir = e)

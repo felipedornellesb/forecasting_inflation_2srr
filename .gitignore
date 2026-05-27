@@ -1,7 +1,6 @@
 .Rhistory
 .RData
 .Rproj.user
-10_data/*.rda
 30_output/**/*.rda
 40_results/tables/*.csv
 40_results/tables/*.tex
@@ -15,13 +14,10 @@
 40_results/**/P10_heatmap_FAVAR_h06_files/**
 40_results/**/P10_heatmap_FAVAR_h12_files/**
 40_results/run_final_2026_05_16_ptbr/**
-40_results/_test_gwcsfe
 .DS_Store
 .claude
 50_backup_historical
-
-# Generated document/text artifacts (not part of the reproducible pipeline)
-40_results/**/*.docx
+40_results/article_figures/tables/*.docx
 40_results/article_figures/tables/
 40_results/run_final_*/
-40_results/_test_mz
+
