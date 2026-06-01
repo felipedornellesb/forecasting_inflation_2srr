@@ -19,5 +19,5 @@
 50_backup_historical
 40_results/article_figures/tables/*.docx
 40_results/article_figures/tables/
-
+.gitignore
 
