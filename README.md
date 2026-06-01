@@ -15,21 +15,13 @@ predictive-accuracy tests, and figures plus CSV tables.
 ## Pipeline overview
 
 ```
-01_data_prep.R         -> yout.rda (realized cumulative target) + rw.rda (random-walk benchmark)
+01_data_prep.R         -> yout.rda (inflation rate target pi_{t+h}) + rw.rda (random-walk benchmark)
 02_forecast_medeiros.R -> 12 econometric / ML benchmarks (Medeiros et al., 2021)
 03_forecast_2srr.R     -> 2SRR in 3 TVP specifications (AR, Factor, FAVAR)
 04_analysis.R          -> RMSE, Diebold-Mariano, Giacomini-White, Model Confidence Set,
                           Mincer-Zarnowitz (Newey-West HAC); beta trajectories; figures + CSV tables
-05_article_figures.R   -> publication figures (PNG/PDF), AR as the benchmark
-```
-
-Auxiliary scripts (optional, read-only verification — not required to reproduce
-the results):
-
-```
-05b_article_figures_AR.R -> AR-benchmark figures: DM (ref 2SRR-AR), CSFE vs AR, GW vs AR
-06_test_gwcsfe.R         -> stand-alone Giacomini-White + CSFE check
-07_test_mz.R             -> stand-alone Mincer-Zarnowitz check (OLS vs Newey-West HAC)
+05_article_figures.R   -> every article figure (AR as benchmark, 2SRR-AR championed) and
+                          all console diagnostics the prose draws on
 ```
 
 Run the numbered scripts in order. `04_analysis.R` is robust to missing inputs —
@@ -104,12 +96,14 @@ constant-parameter ridge.
 | 2SRR-Factor | `lf` lags of PCA factors only |
 | 2SRR-FAVAR | inflation lags + PCA factor lags |
 
-### h-step target: trailing cumulative
+### h-step target: inflation rate
 
-$$Y_h(t) = \sum_{j=0}^{h-1} y_{t-j}$$
+$$y_{t+h} \equiv \pi_{t+h}$$
 
-Identical to Medeiros et al. (2021), which guarantees cell-by-cell
-comparability between 2SRR and the twelve benchmarks.
+The dependent variable at each horizon `h` is the monthly inflation rate
+observed `h` months ahead of the forecast origin. This is the rate convention
+adopted by the research group, consistent with the direct multi-step setup
+of Medeiros et al. (2021).
 
 ### Out-of-sample design: 180 windows
 
@@ -119,13 +113,13 @@ use a rolling window fixed at 606 observations (Medeiros `rolling_window.R`);
 
 ### Mincer-Zarnowitz with a HAC covariance
 
-The Mincer-Zarnowitz joint test (`04_analysis.R`, PART 14b) regresses realized
-cumulative inflation on each forecast and tests `α = 0` and `β = 1` jointly.
-Because the direct multi-step forecasts overlap by `h − 1` months, the residuals
-are MA(h − 1)-autocorrelated; the joint Wald therefore uses a Newey-West HAC
-covariance with lag `h − 1` (`sandwich::NeweyWest`), reducing to the
-heteroskedasticity-robust case at `h = 1`. Ordinary OLS standard errors would
-over-reject at long horizons.
+The Mincer-Zarnowitz joint test (`04_analysis.R`, PART 14b) regresses the
+realised inflation rate on each forecast and tests `α = 0` and `β = 1` jointly.
+The joint Wald is evaluated with a Newey-West HAC covariance
+(`sandwich::NeweyWest`) to allow for residual serial dependence over a
+fifteen-year evaluation window that includes the pandemic and the 2021–22
+surge; the lag truncation is set to `h − 1` as a conservative default
+(reducing to the heteroskedasticity-robust case at `h = 1`).
 
 ### Parallelization
 
@@ -143,10 +137,7 @@ jobs (3 cases × 4 horizons) per window. Default: `detectCores() - 1`.
   02_forecast_medeiros.R   12 benchmark models
   03_forecast_2srr.R       3 TVP cases x 4 horizons x 180 windows
   04_analysis.R            Tests, figures, CSV tables
-  05_article_figures.R     Publication figures (PNG/PDF), AR as the benchmark
-  05b_article_figures_AR.R AR-benchmark figures (DM ref 2SRR-AR, CSFE vs AR, GW vs AR)
-  06_test_gwcsfe.R         Stand-alone Giacomini-White + CSFE check
-  07_test_mz.R             Stand-alone Mincer-Zarnowitz check (OLS vs Newey-West HAC)
+  05_article_figures.R     All article figures + console diagnostics (single source)
 
 10_data/                data.rda (FRED-MD, 786 obs x 117 vars + date) — not tracked
 

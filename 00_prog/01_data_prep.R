@@ -33,9 +33,9 @@ cat(sprintf("Janelas POOS: %d | tau=%d | window_size=%d\n",
 yout <- matrix(NA_real_, nwindows, maxh)
 rw   <- matrix(NA_real_,  nwindows, maxh)
 for (h in 1:maxh) for (i in 1:nwindows) {
-  t_end <- tau + i - 1          # ultima obs in-sample da janela i (Medeiros conv.)
-  if ((t_end + h) <= n) yout[i, h] <- sum(y[(t_end + 1):(t_end + h)])
-  rw[i, h] <- h * y[t_end]      # RW: predicao = h * y_atual (acumulado por h)
+  t_end <- tau + i - 1                                # última obs in-sample
+  if ((t_end + h) <= n) yout[i, h] <- y[t_end + h]    # taxa em t+h  (π_{t+h})
+  rw[i, h] <- y[t_end]                                # RW = última taxa observada
 }
 colnames(yout) <- colnames(rw) <- paste0("h", 1:maxh)
 

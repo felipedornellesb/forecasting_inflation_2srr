@@ -158,11 +158,10 @@ for (m in all_models) {
   for (h in horizons) {
     cat(sprintf("    h=%2d...", h))
     
-    # Direct forecasting: create cumulative target for horizon h
+    # Direct forecasting on the inflation rate: rolling_window() already
+    # produces y[t+h] = pi_{t+h} forecasts when the target series is the
+    # rate itself (no cumulative transformation needed).
     data_h <- data
-    y_h <- as.numeric(stats::filter(data[[variable]], rep(1, h), sides = 1))
-    if (h > 1) y_h[1:(h-1)] <- y_h[h]
-    data_h[[variable]] <- y_h
     
     tryCatch({
       result <- rolling_window(get(m$fn), data_h, nwindows, h, variable)

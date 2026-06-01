@@ -1,0 +1,49 @@
+"case","h","period","n_obs","RMSE_2SRR","RMSE_RW","ratio_vs_RW"
+"AR",1,"Post-GFC/Pre-COVID",116,0.1874,0.2151,0.8711
+"AR",1,"COVID",16,0.2855,0.298,0.9581
+"AR",1,"High Inflation",24,0.3624,0.4164,0.8703
+"AR",1,"Post-Inflation",24,0.1218,0.1376,0.885
+"AR",3,"Post-GFC/Pre-COVID",116,0.2421,0.3077,0.7867
+"AR",3,"COVID",16,0.3121,0.475,0.6571
+"AR",3,"High Inflation",24,0.3285,0.3874,0.8481
+"AR",3,"Post-Inflation",24,0.1693,0.2229,0.7596
+"AR",6,"Post-GFC/Pre-COVID",116,0.2439,0.2975,0.82
+"AR",6,"COVID",16,0.3166,0.3964,0.7987
+"AR",6,"High Inflation",24,0.3268,0.4785,0.6831
+"AR",6,"Post-Inflation",24,0.1364,0.177,0.7709
+"AR",12,"Post-GFC/Pre-COVID",116,0.2644,0.2962,0.8928
+"AR",12,"COVID",16,0.5003,0.5977,0.837
+"AR",12,"High Inflation",24,0.2684,0.4469,0.6006
+"AR",12,"Post-Inflation",24,0.1511,0.211,0.7161
+"Factor",1,"Post-GFC/Pre-COVID",116,0.1788,0.2151,0.831
+"Factor",1,"COVID",16,0.3806,0.298,1.2772
+"Factor",1,"High Inflation",24,0.337,0.4164,0.8095
+"Factor",1,"Post-Inflation",24,0.1359,0.1376,0.9877
+"Factor",3,"Post-GFC/Pre-COVID",116,0.2459,0.3077,0.7992
+"Factor",3,"COVID",16,0.4504,0.475,0.9481
+"Factor",3,"High Inflation",24,0.3554,0.3874,0.9175
+"Factor",3,"Post-Inflation",24,0.1688,0.2229,0.7575
+"Factor",6,"Post-GFC/Pre-COVID",116,0.2395,0.2975,0.8052
+"Factor",6,"COVID",16,0.3364,0.3964,0.8488
+"Factor",6,"High Inflation",24,0.3445,0.4785,0.72
+"Factor",6,"Post-Inflation",24,0.1391,0.177,0.7863
+"Factor",12,"Post-GFC/Pre-COVID",116,0.244,0.2962,0.8237
+"Factor",12,"COVID",16,0.5742,0.5977,0.9607
+"Factor",12,"High Inflation",24,0.2587,0.4469,0.579
+"Factor",12,"Post-Inflation",24,0.1545,0.211,0.7321
+"FAVAR",1,"Post-GFC/Pre-COVID",116,0.1764,0.2151,0.82
+"FAVAR",1,"COVID",16,0.337,0.298,1.131
+"FAVAR",1,"High Inflation",24,0.3423,0.4164,0.8222
+"FAVAR",1,"Post-Inflation",24,0.1364,0.1376,0.9912
+"FAVAR",3,"Post-GFC/Pre-COVID",116,0.2443,0.3077,0.7939
+"FAVAR",3,"COVID",16,0.4441,0.475,0.935
+"FAVAR",3,"High Inflation",24,0.3338,0.3874,0.8617
+"FAVAR",3,"Post-Inflation",24,0.1823,0.2229,0.8178
+"FAVAR",6,"Post-GFC/Pre-COVID",116,0.2428,0.2975,0.816
+"FAVAR",6,"COVID",16,0.3483,0.3964,0.8787
+"FAVAR",6,"High Inflation",24,0.3333,0.4785,0.6966
+"FAVAR",6,"Post-Inflation",24,0.1366,0.177,0.7718
+"FAVAR",12,"Post-GFC/Pre-COVID",116,0.2427,0.2962,0.8195
+"FAVAR",12,"COVID",16,0.5782,0.5977,0.9675
+"FAVAR",12,"High Inflation",24,0.2583,0.4469,0.578
+"FAVAR",12,"Post-Inflation",24,0.1591,0.211,0.7539

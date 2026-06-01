@@ -790,16 +790,17 @@ if (length(fc_all) > 0 && length(fc_2srr) > 0) {
     }
 
     # Time-series plot in MONTHLY SCALE:
-    #   Realized = y_t (same across all 4 panels)
-    #   h-step forecast / h = mean monthly-rate prediction
+    #   Realized = y_t (the monthly inflation rate, same across all 4 panels)
+    #   forecast = the h-step forecast of pi_{t+h} (rate target => already a
+    #   monthly-rate forecast; NOT divided by h).
     base <- if (!is.null(fc_2srr$FAVAR)) "FAVAR" else names(fc_2srr)[1]
     if (h <= ncol(fc_2srr[[base]])) {
       df_p <- data.frame(date = oos_dates,
                           `Realized (monthly y_t)` = y_oos_monthly,
-                          srr = fc_2srr[[base]][, h] / h,
+                          srr = fc_2srr[[base]][, h],
                           check.names = FALSE)
       colnames(df_p)[colnames(df_p) == "srr"] <- paste0("2SRR-", base)
-      for (m in chosen) df_p[[m]] <- fc_all[[m]][, h] / h
+      for (m in chosen) df_p[[m]] <- fc_all[[m]][, h]
       df_long <- pivot_longer(df_p, -date, names_to = "series",
                                values_to = "value")
       p <- ggplot(df_long, aes(date, value, color = series)) +
@@ -807,8 +808,8 @@ if (length(fc_all) > 0 && length(fc_2srr) > 0) {
         geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
         labs(title = sprintf("Forecasts h=%d (monthly scale): 2SRR-%s + 2 best + worst Medeiros",
                               h, base),
-              x = "", y = "Monthly inflation (%)", color = "",
-              caption = "Realized = y_t; h-step forecasts divided by h") +
+              x = "", y = "Monthly inflation (p.p.)", color = "",
+              caption = "Realized = monthly y_t; coloured lines = forecast of pi_{t+h} (no rescaling)") +
         theme_minimal() + theme(legend.position = "bottom")
       save_fig(p, sprintf("P7_2srr_vs_med_h%02d", h), 11, 5)
       # For the combined panel: simplify title and legend
@@ -1018,13 +1019,13 @@ cat(strrep("=", 78), "\n", sep = "")
 plot_2srr_tvps <- function(h) {
   if (!all(c("FAVAR", "AR", "Factor") %in% names(fc_2srr))) return(NULL)
   if (h > ncol(fc_2srr$FAVAR)) return(NULL)
-  # MONTHLY SCALE: Realized = y_t (same across panels); forecasts divided
-  # by h -> mean monthly forecast for the next h months.
+  # MONTHLY SCALE: Realized = monthly y_t (same across panels); the rate target
+  # makes fc[,h] already a monthly-rate forecast of pi_{t+h} (NOT divided by h).
   df_p <- data.frame(date = oos_dates,
                       `Realized (monthly y_t)` = y_oos_monthly,
-                      `2SRR-FAVAR`  = fc_2srr$FAVAR[, h]  / h,
-                      `2SRR-AR`     = fc_2srr$AR[, h]     / h,
-                      `2SRR-Factor` = fc_2srr$Factor[, h] / h,
+                      `2SRR-FAVAR`  = fc_2srr$FAVAR[, h],
+                      `2SRR-AR`     = fc_2srr$AR[, h],
+                      `2SRR-Factor` = fc_2srr$Factor[, h],
                       check.names = FALSE)
   df_long <- pivot_longer(df_p, -date, names_to = "series", values_to = "v")
   df_long$series <- factor(df_long$series,
@@ -1042,9 +1043,9 @@ plot_2srr_tvps <- function(h) {
                                        "2SRR-AR"     = "dashed",
                                        "2SRR-Factor" = "dotted")) +
     labs(title = sprintf("2SRR (3 cases) vs monthly realized, h=%d", h),
-          x = "", y = "Monthly inflation (%)",
+          x = "", y = "Monthly inflation (p.p.)",
           color = "", linetype = "",
-          caption = "h-step forecasts / h = mean monthly prediction; multiply by 12 to annualize") +
+          caption = "Realized = monthly y_t; lines = forecast of pi_{t+h} (no rescaling)") +
     theme_minimal() + theme(legend.position = "bottom")
 }
 plots_tvps <- lapply(setNames(horizons, paste0("h", horizons)), plot_2srr_tvps)
@@ -1090,8 +1091,8 @@ plot_2srr_vs_ridgemed <- function(h) {
   if (h > ncol(fc_2srr$FAVAR) || h > ncol(fc_all$Ridge)) return(NULL)
   df_p <- data.frame(date = oos_dates,
                       `Realized (monthly y_t)` = y_oos_monthly,
-                      `2SRR-FAVAR`       = fc_2srr$FAVAR[, h] / h,
-                      `Ridge (Medeiros)` = fc_all$Ridge[, h]  / h,
+                      `2SRR-FAVAR`       = fc_2srr$FAVAR[, h],
+                      `Ridge (Medeiros)` = fc_all$Ridge[, h],
                       check.names = FALSE)
   df_long <- pivot_longer(df_p, -date, names_to = "series", values_to = "v")
   df_long$series <- factor(df_long$series,
@@ -1106,9 +1107,9 @@ plot_2srr_vs_ridgemed <- function(h) {
                                        "2SRR-FAVAR"       = "solid",
                                        "Ridge (Medeiros)" = "dashed")) +
     labs(title = sprintf("2SRR-FAVAR vs classical Ridge (Medeiros), h=%d", h),
-          x = "", y = "Monthly inflation (%)",
+          x = "", y = "Monthly inflation (p.p.)",
           color = "", linetype = "",
-          caption = "Realized = y_t (monthly); h-step forecasts / h = mean monthly prediction") +
+          caption = "Realized = monthly y_t; lines = forecast of pi_{t+h} (no rescaling)") +
     theme_minimal() + theme(legend.position = "bottom")
 }
 plots_ridgemed <- lapply(setNames(horizons, paste0("h", horizons)),

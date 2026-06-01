@@ -88,9 +88,15 @@ ENGINE_PRIMARY <- "coulombe_fast"
 # Parallelization: within each window we run 12 independent fits (3 cases x
 # 4 horizons). They are perfectly parallelizable. On Windows we use a PSOCK
 # cluster (parallel base package, no extra dependencies).
-# N_CORES = number of workers. Default leaves 1 core free for the OS.
-# To force sequential (debug): N_CORES <- 1
-N_CORES <- max(1, parallel::detectCores() - 1)
+# N_CORES = number of workers.
+# IMPORTANT (memory, not just CPU): each PSOCK worker holds a full copy of the
+# FRED-MD data plus all packages and builds T x T kernels (T up to ~786), using
+# roughly 1 GB each. On a machine with ~8 GB RAM, detectCores()-1 (= 7 workers)
+# exhausts memory and the OS kills a worker, which R reports cryptically as
+#   "Error in summary.connection(connection): invalid connection".
+# Rule of thumb: allow ~1.2 GB of FREE RAM per worker. On 8 GB use 2; on 16 GB
+# use 3-4; on 32 GB use 5-6. To force sequential (debug): N_CORES <- 1.
+N_CORES <- min(max(1, parallel::detectCores() - 1), 2L)
 
 # Hyperparameters (aligned with Coulombe IJF 2025, sec. 4)
 ly          <- 2          # y lags
@@ -189,7 +195,12 @@ for (case in cases_tvp) for (h in horizons)
 cl <- NULL
 if (need_run && N_CORES > 1) {
   cat(sprintf("\n  [parallel] Starting cluster with %d workers ...\n", N_CORES))
-  cl <- parallel::makeCluster(N_CORES, type = "PSOCK")
+  # Defensive: stop any leftover cluster from a previous (interrupted) run in
+  # this same session before creating a new one.
+  if (exists("cl") && !is.null(cl)) try(parallel::stopCluster(cl), silent = TRUE)
+  # outfile = "" lets worker stdout/stderr (including the real error) reach the
+  # console; otherwise a worker crash only shows up as "invalid connection".
+  cl <- parallel::makeCluster(N_CORES, type = "PSOCK", outfile = "")
 
   # Each worker sources the setup (loads Coulombe, Medeiros, tvp_functions).
   # Important: use the master's getwd() because setwd on workers has no effect.
@@ -198,6 +209,13 @@ if (need_run && N_CORES > 1) {
   parallel::clusterEvalQ(cl, {
     setwd(ROOT_DIR)
     suppressMessages(suppressWarnings(source("00_prog/00_setup.R")))
+    # The GARCH step isolates rugarch in a callr subprocess by default, but
+    # spawning callr from INSIDE a PSOCK worker crashes R on Windows. Inside a
+    # worker, run rugarch in-process instead (its rolling-variance fallback
+    # still guards genuine errors). The AR case — the one prone to the rare
+    # rugarch segfault — is generated serially by 03b_forecast_2srr_AR.R, where
+    # callr isolation is safe.
+    options(garch_isolate = FALSE)
     invisible(NULL)
   })
 
@@ -319,6 +337,11 @@ if (!need_run) {
 
   cat(sprintf("\n  Main loop finished in %.1f min.\n",
               as.numeric(difftime(Sys.time(), t_total, units = "mins"))))
+
+  # Free the workers now that the parallel loop is done. The on.exit() above
+  # does not fire for a top-level sourced script, so stop the cluster here to
+  # avoid leaving orphaned Rscript.exe processes holding memory.
+  if (!is.null(cl)) { try(parallel::stopCluster(cl), silent = TRUE); cl <- NULL }
 
   # 6. Save outputs ----------------------------------------------------------
   cat("\n  Saving outputs...\n")

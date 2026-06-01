@@ -164,27 +164,86 @@ tvp_1srr_standalone <- function(X, y, kfold = 5,
 
 # sigma^2_t via GARCH(1,1). Coulombe recomenda GARCH no Step 2. Se falhar
 # ou demorar demais, caimos para variancia rolling 12m. Normalizado a media 1.
-estimate_sigma2_standalone <- function(resid, max_garch_sec = 5) {
-  T_obs <- length(resid); sigma2 <- rep(1, T_obs)
-  if (requireNamespace("rugarch", quietly = TRUE)) {
-    t0 <- Sys.time()
-    out <- tryCatch({
-      spec <- rugarch::ugarchspec(
-        variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
-        mean.model     = list(armaOrder = c(0, 0), include.mean = TRUE))
-      fit <- rugarch::ugarchfit(spec, resid, solver = "hybrid",
-                                solver.control = list(trace = 0))
-      if (as.numeric(difftime(Sys.time(), t0, units = "secs")) > max_garch_sec)
-        return(NULL)
-      as.numeric(rugarch::sigma(fit))^2
-    }, error = function(e) NULL)
-    if (!is.null(out)) return(pmax(out, 1e-8) / mean(pmax(out, 1e-8)))
-  }
+# Rolling-variance fallback (deterministic, crash-safe) for Step 2.
+.sigma2_rolling <- function(resid, window = 12) {
+  T_obs <- length(resid); s <- rep(NA_real_, T_obs)
   for (t in seq_len(T_obs)) {
-    w <- max(1, t - 11):t
-    sigma2[t] <- var(resid[w], na.rm = TRUE)
+    w <- max(1, t - (window - 1)):t
+    s[t] <- if (length(w) >= 2) var(resid[w], na.rm = TRUE) else NA_real_
   }
-  pmax(sigma2, 1e-8) / mean(pmax(sigma2, 1e-8))
+  bad <- !is.finite(s) | s <= 0
+  if (all(bad)) return(rep(1, T_obs))
+  if (any(bad)) s[bad] <- s[which(!bad)[1]]
+  pmax(s, 1e-8) / mean(pmax(s, 1e-8))
+}
+
+# Persistent, crash-isolated GARCH back-end --------------------------------- #
+# rugarch's "hybrid" solver cascades to gosolnp (random restarts) and, on
+# Windows, INTERMITTENTLY crashes R at the C level (segmentation fault). The
+# crash is not a catchable R error, so in a long-lived process (a parallel
+# worker, or a serial loop over 180 windows) it eventually kills the session
+# and leaves a whole 2SRR case unsaved (this is what removed 2SRR-AR).
+# To keep the GARCH(1,1) step (faithful to Coulombe) AND guarantee the run
+# completes, the rugarch fit is executed inside a persistent callr subprocess:
+# if that subprocess crashes, callr reports it as an ordinary, catchable error
+# in the parent, we drop the dead session, and the affected window falls back
+# to a rolling variance. The parent process never dies.
+.garch_state <- new.env(parent = emptyenv())
+
+.garch_session <- function() {
+  rs <- .garch_state$session
+  if (!is.null(rs) && inherits(rs, "r_session") &&
+      tryCatch(rs$is_alive(), error = function(e) FALSE)) return(rs)
+  rs <- tryCatch(callr::r_session$new(), error = function(e) NULL)
+  if (!is.null(rs))
+    tryCatch(rs$run(function() { suppressMessages(requireNamespace("rugarch")); TRUE }),
+             error = function(e) NULL)
+  .garch_state$session <- rs
+  rs
+}
+
+# Close the GARCH subprocess (call at the end of a run; optional — it also dies
+# automatically when the R session exits).
+garch_session_close <- function() {
+  rs <- .garch_state$session
+  if (!is.null(rs)) try(rs$kill(), silent = TRUE)
+  .garch_state$session <- NULL
+  invisible(NULL)
+}
+
+# Self-contained GARCH(1,1) fit (runs in the subprocess; uses only its args).
+.garch_fit_fun <- function(resid, solver) {
+  spec <- rugarch::ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model     = list(armaOrder = c(0, 0), include.mean = TRUE))
+  fit <- rugarch::ugarchfit(spec, resid, solver = solver,
+                            solver.control = list(trace = 0))
+  as.numeric(rugarch::sigma(fit))^2
+}
+
+# Time-varying residual variance for Step 2 of the 2SRR. solver defaults to
+# "hybrid" (the rugarch default, matching the Factor/FAVAR runs); isolation is
+# on by default. Set options(garch_isolate = FALSE) to run rugarch in-process.
+estimate_sigma2_standalone <- function(resid, window = 12,
+                                        solver  = getOption("garch_solver",  "hybrid"),
+                                        isolate = getOption("garch_isolate", TRUE), ...) {
+  T_obs <- length(resid)
+  if (!requireNamespace("rugarch", quietly = TRUE)) return(.sigma2_rolling(resid, window))
+
+  out <- NULL
+  if (isTRUE(isolate) && requireNamespace("callr", quietly = TRUE)) {
+    rs <- .garch_session()
+    if (!is.null(rs))
+      out <- tryCatch(
+        rs$run(.garch_fit_fun, list(resid = as.numeric(resid), solver = solver)),
+        error = function(e) { try(rs$kill(), silent = TRUE)
+                              .garch_state$session <- NULL; NULL })
+  } else {
+    out <- tryCatch(.garch_fit_fun(resid, solver), error = function(e) NULL)
+  }
+  if (is.null(out) || length(out) != T_obs || any(!is.finite(out)) || all(out <= 0))
+    return(.sigma2_rolling(resid, window))
+  pmax(out, 1e-8) / mean(pmax(out, 1e-8))
 }
 
 # sigma^2_u,k = (1/T) sum_t (delta beta_t,k)^2. Normalizado a media 1.
@@ -537,16 +596,20 @@ build_lags <- function(mat, start_lag, n_lags) {
 #   "AR"    : univar=T, nofact=T   -> apenas lags de Y_h (mais intercept)
 #   "Factor": factonly=T           -> apenas lags dos fatores PCA
 #   "FAVAR" : padrao Coulombe      -> lags de Y_h + lags dos fatores
-# Target em todos: Y_h cumulativo trailing (= Medeiros), garantindo
-# comparabilidade direta com 02_forecast_medeiros.R.
+# Target em todos: a TAXA de inflacao h passos a frente (pi_{t+h}), igual ao
+# 01_data_prep.R e ao 02_forecast_medeiros.R, garantindo comparabilidade direta.
 build_design_tvp <- function(y_is, X_is_raw, h, case = c("AR", "Factor", "FAVAR"),
                               ly = 2, lf = 2, nf = 4, include_intercept = TRUE) {
   case  <- match.arg(case)
   T_obs <- length(y_is)
 
-  # Target cumulativo trailing
-  y_h <- as.numeric(stats::filter(y_is, rep(1, h), sides = 1))
-  if (h > 1) y_h[1:(h - 1)] <- y_h[h]
+  # Target: TAXA de inflacao h passos a frente (direct multi-step). Com os
+  # preditores defasados em h (start_lag = h, abaixo), a regressao in-sample e
+  #   y[t] ~ y[t-h], y[t-h-1], ..., F[t-h], ...  e a linha OOS preve y[T_obs+h].
+  # Isso casa com yout[i,h] = pi_{t+h} (01_data_prep.R) e com as previsoes
+  # diretas do rolling_window do Medeiros. (Antes: soma movel = acumulado, o que
+  # punha o 2SRR numa escala diferente do alvo e inflava o RMSE em h>1.)
+  y_h <- as.numeric(y_is)
 
   # Fatores PCA (se aplicavel)
   factors_full <- NULL; nf_eff <- 0

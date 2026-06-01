@@ -1,0 +1,85 @@
+== 03c_extended_grid.R (extended-grid robustness run) ==
+
+== 00_setup.R ==
+
+[OK] factor() PCA defined
+
+Coulombe functions:
+  found      EM_sw.R                        (3033 bytes)
+  found      ICp2.R                         (1152 bytes)
+  found      zfun_v190304.R                 (1782 bytes)
+  found      dualGRRmdA_v190215.R           (4663 bytes)
+  found      CVGSBHK_v181127.R              (4711 bytes)
+  found      CVKFMV_v190214.R               (7514 bytes)
+  found      TVPRR_v181111.R                (15839 bytes)
+  found      TVPRRcosso_v181120.R           (7697 bytes)
+  found      fastZrot_v181125.R             (8677 bytes)
+  found      Xgenerators_v190127.R          (1966 bytes)
+
+Medeiros functions:
+  found functions.R 
+  found rolling_window.R 
+
+Sourcing Coulombe:
+  sourced EM_sw.R
+  sourced ICp2.R
+  sourced zfun_v190304.R
+  sourced dualGRRmdA_v190215.R
+  sourced CVGSBHK_v181127.R
+  sourced CVKFMV_v190214.R
+  sourced TVPRR_v181111.R
+  sourced TVPRRcosso_v181120.R
+  sourced fastZrot_v181125.R
+  sourced Xgenerators_v190127.R
+
+Function check:
+  dualGRR              OK
+  TVPRR_cosso          OK
+  TVPRR                OK
+  cvgs.bhk2015         OK
+  Zfun                 OK
+  EM_sw                OK
+  make_reg_matrix      OK
+  fastZrot             OK
+
+Sourcing Medeiros:
+  sourced functions.R 
+  sourced rolling_window.R 
+  sourced tvp_functions.R 
+
+== Setup complete ==
+Warning messages:
+1: package 'randomForest' was built under R version 4.3.3 
+2: package 'lmtest' was built under R version 4.3.3 
+3: package 'zoo' was built under R version 4.3.3 
+4: package 'sandwich' was built under R version 4.3.3 
+5: package 'reshape2' was built under R version 4.3.3 
+  win   1/180  1.6 min  ETA 286.1 min
+  win  11/180  20.5 min  ETA 314.6 min
+  win  21/180  38.1 min  ETA 288.7 min
+  win  31/180  57.0 min  ETA 274.0 min
+  win  41/180  72.7 min  ETA 246.6 min
+  win  51/180  86.3 min  ETA 218.4 min
+  win  61/180  99.4 min  ETA 193.8 min
+  win  71/180  113.1 min  ETA 173.6 min
+  win  81/180  127.5 min  ETA 155.8 min
+  win  91/180  141.9 min  ETA 138.8 min
+  win 101/180  157.0 min  ETA 122.8 min
+  win 111/180  172.9 min  ETA 107.5 min
+  win 121/180  189.2 min  ETA 92.3 min
+  win 131/180  206.6 min  ETA 77.3 min
+  win 141/180  225.7 min  ETA 62.4 min
+  win 151/180  244.3 min  ETA 46.9 min
+  win 161/180  265.0 min  ETA 31.3 min
+  win 171/180  287.1 min  ETA 15.1 min
+  win 180/180  308.5 min  ETA 0.0 min
+
+  Done in 308.5 min.
+  Wrote: 40_results/run_extended_grid_overexpanded_linspace_-4_18_25/tables/P1_rmsfe_relative_rw_all_h.csv 
+  RMSE/RW (extended grid):
+        model     h1     h3     h6    h12
+1     2SRR_AR 0.9120 0.8025 0.7987 0.8095
+2 2SRR_Factor 0.9541 0.8488 0.8065 0.7482
+3  2SRR_FAVAR 0.9572 0.9065 0.8226 0.7791
+  -> now re-run 05_article_figures.R to generate FIG6.
+== 03c done ==
