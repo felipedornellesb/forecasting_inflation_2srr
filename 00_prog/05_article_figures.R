@@ -203,7 +203,7 @@ fig1 <- ggplot(gw_df, aes(factor(h), model,
                        oob = scales::squish,
                        name = "RMSE(model) / RMSE(AR)") +
   labs(x = "Horizon (h, months)", y = NULL,
-       subtitle = "Cell: RMSE relative to AR (below 1, green = beats AR), with the Giacomini-White conditional-test p-value below; * p<0.10, ** p<0.05, *** p<0.01") +
+       subtitle = "RMSE relative to AR (below 1, green = beats AR), with the Giacomini-White conditional-test p-value below; * p<0.10, ** p<0.05, *** p<0.01") +
   theme_article + theme(panel.grid = element_blank())
 save_fig(fig1, "FIG1_gw_relrmse_vs_AR", width = 8.8, height = 7)
 
