@@ -93,18 +93,31 @@ disp <- function(x) {
   out <- m[x]; out[is.na(out)] <- x[is.na(out)]; unname(out)
 }
 
-# Giacomini-White (2006) conditional predictive ability test, HAC variant.
-gw.test <- function(x, y, p, tau, alternative = "two.sided") {
-  l1  <- abs(x - p); l2 <- abs(y - p); dif <- l1 - l2
-  q   <- length(dif); delta <- mean(dif)
-  mod <- lm(dif ~ 0 + rep(1, q))
-  if (tau == 1) STAT <- summary(mod)$coefficients[1, 3]
-  else          STAT <- delta / sqrt(vcovHAC(mod)[1, 1])
-  PVAL <- switch(alternative,
-                 "two.sided" = 2 * pnorm(-abs(STAT)),
-                 "less"      = pnorm(STAT),
-                 "greater"   = pnorm(STAT, lower.tail = FALSE))
-  list(statistic = STAT, p.value = PVAL)
+# Giacomini-White (2006) CONDITIONAL predictive ability test. Test function
+# h_t = (1, d_{t-1})'; statistic T_n * z_bar' Omega^-1 z_bar ~ chi^2(q = 2),
+# with a Newey-West (Bartlett) HAC covariance of bandwidth h - 1. d = loss_a -
+# loss_b (squared-error losses); a low p-value rejects equal CONDITIONAL
+# predictive ability. This is the genuine GW test promised in Section 3.3 (and
+# the one tabulated in 04_analysis.R, P13_GW_test.csv), distinct from the
+# unconditional Diebold-Mariano test of Figure 2.
+gw_cond <- function(loss_a, loss_b, h = 1) {
+  d <- loss_a - loss_b; d <- d[complete.cases(d)]; n <- length(d)
+  if (n < 20) return(NA_real_)
+  z <- cbind(1, c(NA, d[-n])) * d              # h_t * d_t, n x 2
+  z <- z[complete.cases(z), , drop = FALSE]; T_n <- nrow(z)
+  if (T_n < 20) return(NA_real_)
+  z_bar <- colMeans(z); zc <- z - rep(z_bar, each = T_n)
+  Omega <- crossprod(zc) / T_n
+  bw <- max(0, h - 1)
+  if (bw > 0) for (l in 1:bw) {
+    w_l <- 1 - l / (bw + 1)                     # Bartlett weight
+    G   <- crossprod(zc[-(1:l), , drop = FALSE],
+                     zc[-((T_n - l + 1):T_n), , drop = FALSE]) / T_n
+    Omega <- Omega + w_l * (G + t(G))
+  }
+  stat <- tryCatch(as.numeric(T_n * t(z_bar) %*% solve(Omega) %*% z_bar),
+                   error = function(e) NA_real_)
+  if (is.na(stat)) NA_real_ else 1 - pchisq(stat, df = ncol(z))
 }
 
 # Auto-detect a run folder if the configured one is missing.
@@ -167,7 +180,8 @@ for (mn in names(all_fc)) {
   for (h in hz) {
     ok <- complete.cases(yout[, h], AR_fc[, h], M[, h]); if (sum(ok) < 20) next
     rel <- rmse_fn(yout[, h], M[, h]) / rmse_fn(yout[, h], AR_fc[, h])
-    pv  <- tryCatch(gw.test(AR_fc[ok, h], M[ok, h], yout[ok, h], h)$p.value,
+    pv  <- tryCatch(gw_cond((yout[ok, h] - M[ok, h])^2,
+                            (yout[ok, h] - AR_fc[ok, h])^2, h),
                     error = function(e) NA_real_)
     gw_rows[[length(gw_rows) + 1]] <- data.frame(
       model = disp(mn), h = h, rel = round(rel, 3), p = round(pv, 3))
@@ -189,7 +203,7 @@ fig1 <- ggplot(gw_df, aes(factor(h), model,
                        oob = scales::squish,
                        name = "RMSE(model) / RMSE(AR)") +
   labs(x = "Horizon (h, months)", y = NULL,
-       subtitle = "Below 1 (green) beats AR; GW two-sided HAC p-value below; * p<0.10, ** p<0.05, *** p<0.01") +
+       subtitle = "Cell: RMSE relative to AR (below 1, green = beats AR), with the Giacomini-White conditional-test p-value below; * p<0.10, ** p<0.05, *** p<0.01") +
   theme_article + theme(panel.grid = element_blank())
 save_fig(fig1, "FIG1_gw_relrmse_vs_AR", width = 8.8, height = 7)
 
@@ -459,7 +473,7 @@ fig11 <- ggplot(mapping = aes(date, value)) +
 save_fig(fig11, "FIG11_monthly_inflation_vs_fc_4h", width = 11, height = 7)
 
 # ---- Console diagnostics for the prose --------------------------------------
-cat("\n=== RMSE(model)/RMSE(AR) and GW (HAC) two-sided p-value ===\n")
+cat("\n=== RMSE(model)/RMSE(AR) and Giacomini-White CONDITIONAL p-value ===\n")
 cat(sprintf("%-16s | %s\n", "spec",
             paste(sprintf("h=%-2d rel (gwp)", hz), collapse = "  ")))
 for (nm in c("2SRR_FAVAR", "2SRR_Factor", "2SRR_AR")) {
@@ -468,7 +482,8 @@ for (nm in c("2SRR_FAVAR", "2SRR_Factor", "2SRR_AR")) {
   for (h in hz) {
     ok  <- complete.cases(yout[, h], AR_fc[, h], M[, h])
     rel <- rmse_fn(yout[, h], M[, h]) / rmse_fn(yout[, h], AR_fc[, h])
-    gwp <- tryCatch(gw.test(AR_fc[ok, h], M[ok, h], yout[ok, h], h)$p.value,
+    gwp <- tryCatch(gw_cond((yout[ok, h] - M[ok, h])^2,
+                            (yout[ok, h] - AR_fc[ok, h])^2, h),
                     error = function(e) NA_real_)
     line <- paste0(line, sprintf("  %.3f (%.3f)", rel, gwp))
   }
@@ -503,10 +518,11 @@ for (hC in hz) {
               paste(sprintf("%s=%+.3f", names(vals), vals), collapse = "  ")))
 }
 
-# Mincer-Zarnowitz with HAC-robust p-value AND relative RMSE vs 2SRR-FAVAR
-# (the table the article reports in Section 4.5; addresses the professor's
-# request to add relative RMSE to the MZ table).
-cat("\n=== Mincer-Zarnowitz (Newey-West HAC, lag = h-1)  +  RMSE / RMSE(2SRR-FAVAR) ===\n")
+# TABLE 1 (Section 4.5) — RMSE RELATIVE TO THE AUTOREGRESSION paired with the
+# Mincer-Zarnowitz forecast-efficiency p-value (Newey-West HAC). AR is the
+# common benchmark, matching FIG1 and the GW analysis. Emitted both as a console
+# table (the article's Table 1) and as a heatmap (FIG12) coloured by the MZ
+# p-value: green (p > 0.10) = efficiency not rejected, red = rejected.
 mz_test_hac <- function(y, f, h) {
   ok <- complete.cases(y, f); if (sum(ok) < 30) return(NA_real_)
   y_ <- y[ok]; f_ <- f[ok]
@@ -519,19 +535,44 @@ mz_test_hac <- function(y, f, h) {
                 error = function(e) NA_real_)
   if (is.na(w) || w < 0) NA_real_ else 1 - pchisq(w, df = 2)
 }
-sel_mz <- c("2SRR_FAVAR", "2SRR_Factor", "2SRR_AR", "RF", "LASSO", "ElNET", "AR")
-cat(sprintf("%-14s | %s\n", "model",
-            paste(sprintf("h=%-2d  rel  MZp", hz), collapse = "  ")))
-for (mn in sel_mz) {
+mz_models <- c("AR", "2SRR_FAVAR", "2SRR_Factor", "2SRR_AR", "RF", "LASSO", "ElNET")
+mz_rows <- list()
+for (mn in mz_models) {
   M <- all_fc[[mn]]; if (is.null(M)) next
-  line <- sprintf("%-14s |", disp(mn))
   for (h in hz) {
-    rel <- rmse_fn(yout[, h], M[, h]) / rmse_fn(yout[, h], ref_FAVAR[, h])
+    rel <- rmse_fn(yout[, h], M[, h]) / rmse_fn(yout[, h], AR_fc[, h])
     pv  <- mz_test_hac(yout[, h], M[, h], h)
-    line <- paste0(line, sprintf("  %5.3f %5.3f", rel, pv))
+    mz_rows[[length(mz_rows) + 1]] <- data.frame(
+      model = disp(mn), h = h, rel = round(rel, 3), mzp = round(pv, 3))
   }
-  cat(line, "\n")
 }
+mz_tab <- do.call(rbind, mz_rows)
+
+cat("\n=== TABLE 1: RMSE relative to AR  /  Mincer-Zarnowitz HAC p-value ===\n")
+cat(sprintf("%-14s | %s\n", "model",
+            paste(sprintf("h=%-2d  rel / MZp", hz), collapse = "  ")))
+for (mn in disp(mz_models)) {
+  rr <- mz_tab[mz_tab$model == mn, ]; if (!nrow(rr)) next
+  rr <- rr[match(hz, rr$h), ]
+  cat(sprintf("%-14s |", mn))
+  for (i in seq_along(hz)) cat(sprintf("  %5.3f / %5.3f", rr$rel[i], rr$mzp[i]))
+  cat("\n")
+}
+
+# FIG12 — heatmap of Table 1 (coloured by the MZ p-value).
+mz_hm <- mz_tab
+mz_hm$model <- factor(mz_hm$model, levels = rev(disp(mz_models)))   # AR on top
+mz_hm$lab   <- sprintf("%.2f\n(%.3f)", mz_hm$rel, mz_hm$mzp)
+fig12 <- ggplot(mz_hm, aes(factor(h), model, fill = pmin(pmax(mzp, 0), 0.5))) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(aes(label = lab), size = 2.8, lineheight = 0.85) +
+  scale_fill_gradient2(midpoint = 0.10, low = "#B0202A", mid = "white",
+                       high = "#1A7F37", limits = c(0, 0.5),
+                       oob = scales::squish, name = "Mincer-Zarnowitz p-value") +
+  labs(x = "Horizon (h, months)", y = NULL,
+       subtitle = "RMSE relative to AR, with the MZ joint p-value below. Green (p > 0.10) = efficiency not rejected; red = rejected") +
+  theme_article + theme(panel.grid = element_blank())
+save_fig(fig12, "FIG12_mincer_zarnowitz_relAR", width = 8.8, height = 5.5)
 
 cat("\n== 05_article_figures.R done ==\n")
 cat("Figures:", normalizePath(OUT_FIG), "\n")
