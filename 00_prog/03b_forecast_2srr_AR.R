@@ -1,14 +1,11 @@
 # =============================================================================
-# 03b_forecast_2srr_AR.R — runs ONLY the 2SRR-AR case.
+# 03b_forecast_2srr_AR.R  --  the 2SRR-AR case only.
 #
-# Why this exists: rugarch's solver intermittently crashes R at the C level on
-# Windows. In the full parallel 03 that crash silently killed the worker that
-# happened to be handling the AR case, leaving 2SRR_AR.rda unsaved (Factor and
-# FAVAR completed). This script regenerates ONLY the AR case, serially, with the
-# GARCH(1,1) step isolated in a callr subprocess (see tvp_functions.R): a
-# subprocess crash is caught in the parent and that single window falls back to
-# a rolling variance, so the run always finishes WITH GARCH on (almost) every
-# window. Factor/FAVAR outputs are NOT touched.
+# Separate from 03 because rugarch's solver intermittently crashes R (C level) on
+# Windows; inside the parallel 03 that killed the AR worker. Here AR runs serially
+# with the GARCH(1,1) step isolated in a callr subprocess (see tvp_functions.R):
+# a subprocess crash is caught and that window falls back to a rolling variance,
+# so the run always finishes. Factor/FAVAR outputs are not touched.
 #
 # Output: 2SRR_AR.rda, Ridge_from_2SRR_AR.rda, betas_2SRR_AR.rda
 # =============================================================================
@@ -53,15 +50,21 @@ prog <- file.path(DIR_CHECKPOINTS, "run_AR.progress")
 dir.create(dirname(prog), recursive = TRUE, showWarnings = FALSE)
 cat(sprintf("AR run start %s\n", Sys.time()), file = prog)
 
-# ---- Serial POOS loop (AR only) ---------------------------------------------
+# ---- Serial POOS loop (AR only) — ROLLING window (Medeiros convention) -------
+# For horizon h, window j uses in-sample rows j:(j + window_size_h - 1),
+# window_size_h = bigt - (n_oos + h - 1) = tau - h + 1, forecasting y[tau + j].
+# Identical in-sample windows and targets as the professor's AR benchmark — the
+# 2SRR-AR and the Medeiros AR differ only by the estimator.
+# (The AR case is univariate: build_design_tvp ignores X_is_raw, so we pass NULL
+# and skip the unused factor standardization.)
 t_total <- Sys.time(); n_fallback <- 0L
-for (wi in 1:n_oos) {
-  t_end    <- tau + wi - 1
-  X_is_std <- prepare_X_is(as.matrix(data[1:t_end, -y_col, drop = FALSE]))
-  y_is     <- as.numeric(data[1:t_end, y_col])
+for (h in horizons) {
+  window_size <- bigt - (n_oos + h - 1)            # = tau - h + 1
+  for (wi in 1:n_oos) {
+    is_idx <- wi:(wi + window_size - 1)
+    y_is   <- as.numeric(data[is_idx, y_col])
 
-  for (h in horizons) {
-    res <- fit_2srr_window(y_is = y_is, X_is_raw = X_is_std, h = h, case = "AR",
+    res <- fit_2srr_window(y_is = y_is, X_is_raw = NULL, h = h, case = "AR",
                            ly = ly, lf = lf, nf = nf, kfold = kfold,
                            lambdas = lambda_vec, lambda2 = lambda2,
                            coulombe_lambdavec = lambda_vec, engine = ENGINE)
@@ -74,17 +77,17 @@ for (wi in 1:n_oos) {
       lambda_step1 = res$lambda_step1, omega = res$omega, sigma2 = res$sigma2,
       var_names = res$var_names, n_obs = res$n_obs, n_vars = res$n_vars,
       status = res$status)
-  }
 
-  if (wi %% 10 == 1 || wi == n_oos) {
-    el <- as.numeric(difftime(Sys.time(), t_total, units = "mins"))
-    eta <- el / wi * (n_oos - wi)
-    msg <- sprintf("  win %3d/%d  %.1f min elapsed  ETA %.1f min\n", wi, n_oos, el, eta)
-    cat(msg); cat(msg, file = prog, append = TRUE)
-  }
-  if (wi %% 30 == 0) {           # checkpoint (safety net)
-    forecasts <- fc_AR
-    save(forecasts, file = file.path(DIR_FORECASTS, "2SRR_AR.rda"))
+    if (wi %% 25 == 1 || wi == n_oos) {
+      el  <- as.numeric(difftime(Sys.time(), t_total, units = "mins"))
+      msg <- sprintf("  h=%2d win %3d/%d  (T_is=%d)  %.1f min elapsed\n",
+                     h, wi, n_oos, window_size, el)
+      cat(msg); cat(msg, file = prog, append = TRUE)
+    }
+    if (wi %% 60 == 0) {           # checkpoint (safety net)
+      forecasts <- fc_AR
+      save(forecasts, file = file.path(DIR_FORECASTS, "2SRR_AR.rda"))
+    }
   }
 }
 

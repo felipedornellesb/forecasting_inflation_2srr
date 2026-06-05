@@ -1,11 +1,16 @@
 # ==============================================================================
-# 02_forecast_medeiros.R
+# 02_forecast_medeiros.R   ***OPTIONAL -- not part of the final pipeline***
 #
-# Pipeline Medeiros: 12 modelos (Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF,
-# Bagging, Factor, T.Factor, CSR, AR, AR_BIC) sobre FRED-MD, horizontes 1/3/6/12.
+# Reproduces the 12 Medeiros models locally as a replication check (its h=1
+# matches the professor's run, corr 0.9999). The benchmarks of record come from
+# his official run, imported by 01.
 #
-# Target: cumulativo trailing Y_h(t) = sum_{j=0}^{h-1} y_{t-j} (id. ao 2SRR).
-# Janela: rolling fixo (Medeiros rolling_window.R), 180 janelas POOS.
+# Caveat: uses a fixed 312-window scheme for every horizon, so it matches the
+# professor at h=1 but differs at h>1 -- use 01's imported files, not this script's
+# h>1 forecasts. Final chain: 01 -> 03 -> 03b -> 04 -> 05.
+#
+# Models: Ridge, LASSO, ElNET, AdaLASSO, AdaElNET, RF, Bagging, Factor, T.Factor,
+# CSR, AR, AR_BIC over FRED-MD, horizons 1/3/6/12. Target = inflation RATE.
 # ==============================================================================
 cat("== 02_forecast_medeiros.R ==\n\n")
 source("00_prog/00_setup.R")
@@ -43,6 +48,16 @@ runarbic        <- function(ind, df, variable, horizon)
 # Aliases para os nomes "didaticos" (Medeiros e meio inconsistente nos nomes)
 runbag          <- function(...) runbagging(...)
 runfactor       <- function(...) runfact(...)
+# Memory-light Random Forest: drops importance = TRUE. The forest and its
+# predictions are IDENTICAL with or without importance (importance is a
+# post-hoc OOB computation that does not change the trees or predict()), and
+# the article never uses RF variable importance. This removes the per-fit
+# memory blow-up that, on a RAM-constrained machine, sent RF into swap/thrash.
+runrf           <- function(ind, df, variable, horizon) {
+  pd <- dataprep(ind, df, variable, horizon)
+  m  <- randomForest::randomForest(pd$Xin, pd$yin)
+  list(forecast = as.numeric(predict(m, pd$Xout)), outputs = list())
+}
 
 # Patch do runtfact: a versao original do Medeiros (functions.R) so cria a
 # variavel `dummy` quando variable == "CPI" ou "PCE" (nomes da base BR do

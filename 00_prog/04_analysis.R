@@ -1,46 +1,17 @@
 # ==============================================================================
-# 04_analysis.R
+# 04_analysis.R  --  consolidated analysis: 2SRR (Coulombe 2025) vs Ridge vs the
+# Medeiros benchmarks. Produces the RMSE / DM / GW / MCS / Mincer-Zarnowitz tables
+# and supporting figures.
 #
-# Consolidated analysis: 2SRR (Coulombe 2025) vs Ridge vs Medeiros.
-# Replaces legacy scripts 04 (analysis) and 05 (descriptive) with a single
-# unified pipeline.
+# Sections: RMSFE vs RW; the 3 TVP specs; betas & lambdas (Step 1 vs Step 4);
+# 2SRR vs Ridge/Medeiros; parsimony; sub-periods; MCS; Giacomini-White;
+# econometric-validation audit; realized-series audit (section 0b).
 #
-# Analyses produced:
-#   1. Descriptive pre-forecasting analysis of TVP betas (full in-sample)
-#   2. Three TVP specifications compared (TVP-AR, TVP-Factor, TVP-FAVAR)
-#   3. Betas WITHIN each horizon (h=1, 3, 6, 12) — trajectories, signs
-#   4. Comparison among the TVPs and their betas
-#   5. Ridge lambdas (Step 1) vs 2SRR (Step 4)
-#   6. 2SRR vs Ridge: RMSE, DM, CSSED, rolling RMSE
-#   7. 2SRR vs Medeiros: 2 best + worst, per horizon
-#   8. Formal parsimony (HHI, relative shrinkage, near-zero, sigma^2_u)
-#   9. Sub-period analysis (Pre-GFC, GFC, Post-GFC, COVID, High Inf, ...)
-#  10. Interactive plotly (3D betas, lambdas, heatmaps)
-#  11. Sanity check original Coulombe vs coulombe_fast
-#  11b-f. Forecasts 2SRR vs other TVPs, vs Medeiros Ridge, betas vs Ridge,
-#        evolution, and 4h combined panels (CSSED, rolling, lambdas)
-#  12. MCS — Model Confidence Set (Hansen, Lunde & Nason 2011)
-#  13. GW — Giacomini-White (2006) conditional predictive ability test
-#  13b. Econometric validation and consistency with Coulombe (audit)
-#  + SECTION 0b: Audit of the realized series (yout consistency across h)
-#
-# INPUTS:
-#   forecasts/yout.rda, rw.rda
-#   forecasts/<Model>.rda    (whichever Medeiros models exist)
-#   forecasts/2SRR_<case>.rda  (AR, Factor, FAVAR)
-#   forecasts/Ridge_from_2SRR_<case>.rda  (Step 1 baseline)
-#   forecasts/2SRR_FAVAR_coulombe_check.rda  (sanity check)
-#   betas/betas_2SRR_<case>.rda, betas/betas_<Model>.rda
-#
-# OUTPUTS:
-#   40_results/run_final_<timestamp>/
-#     figures/ : PDFs + interactive HTMLs (plotly)
-#     tables/  : CSVs
-#     final_narrative.txt
-#
-# Robust to missing inputs: each section checks file.exists before processing.
+# Inputs : forecasts/{yout,rw,<model>,2SRR_<case>,Ridge_from_2SRR_<case>}.rda,
+#          betas/betas_2SRR_<case>.rda   (each section checks file.exists).
+# Outputs: 40_results/run_final_<timestamp>/{figures,tables}/
+# Run from the project root.
 # ==============================================================================
-# Run this script from the project root directory.
 cat("== 04_analysis.R ==\n\n")
 source("00_prog/00_setup.R")
 
@@ -78,6 +49,7 @@ cat("Output folder:", OUT_DIR, "\n\n")
 # so it never kills the script — the figure is ALREADY saved to PDF at that
 # point.
 save_fig <- function(plt, fname, width = 8, height = 6) {
+  fname <- gsub("FAVAR", "ARDI", fname, fixed = TRUE)   # display: FAVAR -> ARDI
   if (is.null(plt) ||
       !inherits(plt, c("ggplot", "patchwork", "gg", "grob"))) {
     cat("  [skip]", fname, "(NULL or invalid plot)\n")
@@ -94,6 +66,16 @@ save_fig <- function(plt, fname, width = 8, height = 6) {
   invisible(plt)
 }
 save_tbl <- function(df, fname, ...) {
+  # Display rename applied to EVERY output table: the data-rich case (internal id
+  # "FAVAR") is the ARDI specification of Goulet Coulombe (2025), shown as ARDI
+  # per the advisor's request. Mapping the column names and character values here
+  # guarantees no exported table carries "FAVAR" (case columns, RidgeStep1_FAVAR
+  # benchmark, betas-cross columns, etc.). Internal objects/keys are untouched.
+  names(df) <- gsub("FAVAR", "ARDI", names(df), fixed = TRUE)
+  for (j in seq_along(df))
+    if (is.character(df[[j]]) || is.factor(df[[j]]))
+      df[[j]] <- gsub("FAVAR", "ARDI", as.character(df[[j]]), fixed = TRUE)
+  fname <- gsub("FAVAR", "ARDI", fname, fixed = TRUE)
   csv_path <- file.path(TAB_DIR, paste0(fname, ".csv"))
   write.csv(df, csv_path, row.names = FALSE)
   cat("  [tbl]", csv_path, "\n")
@@ -120,6 +102,7 @@ na_shade_layers <- function(dates, na_mask, fill = "grey55", alpha = 0.30) {
 # Extra output: PDF. Also prints to the console (each plot individually).
 save_combined_4h <- function(plots_list, fname, title = NULL,
                               width = 13, height = 9) {
+  fname <- gsub("FAVAR", "ARDI", fname, fixed = TRUE)   # display: FAVAR -> ARDI
   plots_list <- plots_list[!sapply(plots_list, is.null)]
   if (length(plots_list) < 2) return(invisible(NULL))
   if (has_patchwork) {
@@ -219,113 +202,86 @@ rmse_rw <- sapply(1:maxh, function(h) rmse_fn(yout[, h], rw[, h]))
 names(rmse_rw) <- paste0("h", 1:maxh)
 cat("\nRandom Walk RMSE per h:\n"); print(round(rmse_rw, 4))
 
-# "Pure" monthly series y_t aligned with OOS dates. Used in plots as the
-# "Monthly realized" line (same across all 4 panels, instead of yout[, h]
-# which is cumulative and scales with h).
-# y_oos_monthly[i] = y at the FIRST month of horizon i = y_{tau + i}
+# Monthly realized inflation rate aligned with the OOS dates. With the rate
+# target, yout[, h] = y[tau + i] is already this same series for every h, so the
+# "Monthly realized" plot line equals yout[, h].
+# y_oos_monthly[i] = realized rate at the target date of window i = y_{tau + i}
 y_raw_global   <- data$CPIAUCSL
 tau_global     <- length(y_raw_global) - n_oos
 y_oos_monthly  <- y_raw_global[(tau_global + 1):(tau_global + n_oos)]
 
 
 # ============================================================================ #
-# SECTION 0b: AUDIT OF THE REALIZED SERIES
+# SECTION 0b: AUDIT OF THE REALIZED SERIES (professor's POOS convention)
 #
-# Ensures yout is correctly aligned with the raw y_t series. For each
-# (i, h), yout[i,h] MUST equal sum_{j=1..h} y_{tau+i-1+j} (h-step cumulative
-# from the end of in-sample window i).
+# Target = inflation RATE pi_{t+h}. In the professor's convention every horizon's
+# 312 forecasts target the SAME realized dates y[tau+1 .. tau+n_oos]; only the
+# forecast lead changes. Hence (built by 01_data_prep.R):
+#   yout[i, h] = y[tau + i]       (IDENTICAL across h — the realized rate)
+#   rw[i, h]   = y[tau + i - h]   (no-change forecast: last rate at the origin)
 #
 # Checks:
-#   (a) yout[i,h] - yout[i,h-1] = y_{tau+i-1+h}  (recursive identity)
-#   (b) Magnitudes: yout[, h] should have mean/variance scaling with h
-#   (c) Joint plot of the 4 horizons to visually verify coherence
+#   (a) yout columns identical across h and equal to the realized rate;
+#   (b) rw[i,h] = y[tau + i - h]  (random-walk lag);
+#   (c) plot of the realized rate over the OOS period.
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("SECTION 0b: Audit of the realized series (yout)\n")
+cat("SECTION 0b: Audit of the realized series (yout / rw)\n")
 cat(strrep("=", 78), "\n", sep = "")
 
-# Raw y_t (using the variable name from the base)
 y_raw <- data$CPIAUCSL
 if (is.null(y_raw)) y_raw <- data[, "CPIAUCSL"]
 tau <- length(y_raw) - n_oos
+realized <- y_raw[(tau + 1):(tau + n_oos)]      # the inflation rate over OOS
 
-# Numerical check: yout[i, h] = sum(y_raw[(tau+i):(tau+i-1+h)])?
-audit_rows <- list()
-for (h in horizons) {
-  ok <- 1:(n_oos - h)   # only indices where the sum is defined
-  diffs <- sapply(ok, function(i) {
-    expected <- sum(y_raw[(tau + i):(tau + i - 1 + h)])
-    yout[i, h] - expected
-  })
-  audit_rows[[length(audit_rows) + 1]] <- data.frame(
-    h = h, n_checks = length(ok),
-    max_abs_diff = max(abs(diffs), na.rm = TRUE),
-    mean_diff    = mean(diffs, na.rm = TRUE),
-    consistent   = max(abs(diffs), na.rm = TRUE) < 1e-8
-  )
-}
-audit_df <- do.call(rbind, audit_rows)
+# (a) yout columns identical across h and equal to the realized rate
+cols_identical <- all(vapply(2:maxh,
+                  function(h) isTRUE(all.equal(as.numeric(yout[, h]),
+                                               as.numeric(yout[, 1]))), logical(1)))
+yout_matches   <- isTRUE(all.equal(as.numeric(yout[, 1]), realized))
+audit_df <- data.frame(
+  check  = c("yout cols identical across h", "yout == realized rate y[tau+1..n]"),
+  result = c(cols_identical, yout_matches))
 save_tbl(audit_df, "P0b_yout_audit",
-         latex_caption = "Audit: yout[i,h] = sum(y[tau+i..tau+i-1+h])",
+         latex_caption = "Audit of the realized rate (yout)",
          latex_label   = "tab:audit_yout")
+cat(sprintf("\n  yout columns identical across h: %s\n",
+            ifelse(cols_identical, "OK", "FAIL")))
+cat(sprintf("  yout == realized rate y[tau+1..n]: %s\n",
+            ifelse(yout_matches, "OK", "FAIL")))
 
-if (all(audit_df$consistent)) {
-  cat("\n  [OK] yout is aligned across all 4 horizons.\n")
-} else {
-  cat("\n  [FAIL] yout has inconsistencies — inspect 01_data_prep.R.\n")
-}
-
-# Recursive identity: yout[i,h] - yout[i,h-1] - y[tau+i-1+h] = 0
-cat("\n  Recursive identity yout[i,h] - yout[i,h-1] = y_{tau+i-1+h}:\n")
-for (h in 2:maxh) {
-  i_ok <- 1:(n_oos - h)
-  d <- yout[i_ok, h] - yout[i_ok, h - 1] -
-        sapply(i_ok, function(i) y_raw[tau + i - 1 + h])
-  cat(sprintf("    h=%2d -> h-1=%2d: max|d|=%.3e [%s]\n",
-              h, h - 1, max(abs(d), na.rm = TRUE),
+# (b) random-walk alignment: rw[i,h] = y[tau + i - h]
+cat("\n  Random-walk alignment rw[i,h] = y[tau+i-h]:\n")
+for (h in horizons) {
+  idx  <- 1:n_oos
+  i_ok <- idx[(tau + idx - h) >= 1]
+  d    <- rw[i_ok, h] - y_raw[tau + i_ok - h]
+  cat(sprintf("    h=%2d: max|d|=%.3e [%s]\n", h, max(abs(d), na.rm = TRUE),
               ifelse(max(abs(d), na.rm = TRUE) < 1e-8, "OK", "FAIL")))
 }
 
-# Joint plot: yout[, c(1,3,6,12)] over time, 4 panels (2x2).
-# Use local() so h is CAPTURED in the plot's scope (avoids lazy-eval
-# that would render all panels with h from the end of the loop).
-plots_audit <- list()
-for (h in horizons) {
-  plots_audit[[as.character(h)]] <- local({
-    h_val <- h
-    df_p  <- data.frame(date = oos_dates, yout_h = yout[, h_val])
-    ggplot(df_p, aes(date, yout_h)) +
-      geom_line(color = "steelblue", linewidth = 0.7) +
-      geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
-      labs(title  = sprintf("yout[, h=%d]: %d-step cumulative",
-                              h_val, h_val),
-            x = "", y = sprintf("Y_%d(t)", h_val)) +
-      theme_minimal()
-  })
-}
-save_combined_4h(plots_audit, "P0b_yout_4h_combined",
-                  title = "yout audit: trailing cumulative for h=1,3,6,12")
-for (h in horizons)
-  save_fig(plots_audit[[as.character(h)]],
-           sprintf("P0b_yout_h%02d", h), 8, 4)
+# (c) plot the realized inflation rate over the OOS period
+df_real <- data.frame(date = oos_dates, rate = realized)
+p_real <- ggplot(df_real, aes(date, rate)) +
+  geom_line(color = "steelblue", linewidth = 0.7) +
+  geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
+  labs(title = "Realized inflation rate over the out-of-sample period",
+       x = "", y = expression(pi[t])) +
+  theme_minimal()
+save_fig(p_real, "P0b_realized_rate", 8, 4)
 
-# Statistics: do mean and variance scale with h?
+# Descriptive statistics: realized rate, and the four RW lags
 audit_stats <- data.frame(
-  h    = horizons,
-  mean = sapply(horizons, function(h) mean(yout[, h], na.rm = TRUE)),
-  sd   = sapply(horizons, function(h) sd(yout[, h],   na.rm = TRUE)),
-  min  = sapply(horizons, function(h) min(yout[, h],  na.rm = TRUE)),
-  max  = sapply(horizons, function(h) max(yout[, h],  na.rm = TRUE))
-)
-audit_stats$ratio_mean_vs_h1 <- audit_stats$mean / audit_stats$mean[1]
+  series = c("realized", sprintf("rw_h%d", horizons)),
+  mean   = c(mean(realized, na.rm = TRUE),
+             sapply(horizons, function(h) mean(rw[, h], na.rm = TRUE))),
+  sd     = c(sd(realized, na.rm = TRUE),
+             sapply(horizons, function(h) sd(rw[, h], na.rm = TRUE))))
 save_tbl(audit_stats, "P0b_yout_stats",
-         latex_caption = "Descriptive statistics of yout per horizon",
+         latex_caption = "Descriptive statistics: realized rate and RW lags",
          latex_label   = "tab:audit_yout_stats")
-cat("\n  Check: does yout[,h] have mean h-times larger than yout[,1]?\n")
-cat(sprintf("    h= 1 ratio=%.2f (expected 1)\n",  audit_stats$ratio_mean_vs_h1[1]))
-cat(sprintf("    h= 3 ratio=%.2f (expected ~3)\n", audit_stats$ratio_mean_vs_h1[2]))
-cat(sprintf("    h= 6 ratio=%.2f (expected ~6)\n", audit_stats$ratio_mean_vs_h1[3]))
-cat(sprintf("    h=12 ratio=%.2f (expected ~12)\n",audit_stats$ratio_mean_vs_h1[4]))
+cat("\n  Realized rate: mean=", round(mean(realized, na.rm = TRUE), 4),
+    " sd=", round(sd(realized, na.rm = TRUE), 4), "\n", sep = "")
 
 # ============================================================================ #
 # PART 1: RMSFE — Master table relative to Random Walk
@@ -344,6 +300,16 @@ build_rmsfe_row <- function(model_name, fc_mat) {
   as.data.frame(row, stringsAsFactors = FALSE)
 }
 
+# Reader-facing label for the 3 TVP specs. Professor's request: the data-rich
+# case (internal id "FAVAR") is the ARDI specification of Goulet Coulombe (2025),
+# so it is displayed as 2SRR-ARDI. Internal keys/files keep the "FAVAR" id.
+tvp_lab <- function(case) vapply(as.character(case), function(c)
+  switch(c, FAVAR = "2SRR-ARDI", AR = "2SRR-AR", Factor = "2SRR-Factor",
+         paste0("2SRR-", c)), character(1), USE.NAMES = FALSE)
+# Step-1 ridge baseline label (same FAVAR -> ARDI display mapping).
+step1_lab <- function(case)
+  paste0("RidgeStep1_", ifelse(as.character(case) == "FAVAR", "ARDI", as.character(case)))
+
 rmsfe_rows <- list()
 rmsfe_rows[["RW"]] <- data.frame(c(list(model = "RW"),
                                     setNames(as.list(rep(1, maxh)),
@@ -351,9 +317,9 @@ rmsfe_rows[["RW"]] <- data.frame(c(list(model = "RW"),
                                   stringsAsFactors = FALSE)
 for (mn in names(fc_all))   rmsfe_rows[[mn]] <- build_rmsfe_row(mn, fc_all[[mn]])
 for (case in names(fc_2srr)) rmsfe_rows[[paste0("2SRR_", case)]] <-
-  build_rmsfe_row(paste0("2SRR_", case), fc_2srr[[case]])
+  build_rmsfe_row(tvp_lab(case), fc_2srr[[case]])
 for (case in names(fc_ridge_step1)) rmsfe_rows[[paste0("RidgeStep1_", case)]] <-
-  build_rmsfe_row(paste0("RidgeStep1_", case), fc_ridge_step1[[case]])
+  build_rmsfe_row(step1_lab(case), fc_ridge_step1[[case]])
 
 rmsfe_table <- do.call(rbind, rmsfe_rows)
 cols_show   <- c("model", paste0("h", horizons))
@@ -366,7 +332,7 @@ save_tbl(rmsfe_table, "P1_rmsfe_relative_rw_all_h")
 # PART 2: Comparison among the 3 TVPs (AR vs Factor vs FAVAR)
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 2: TVP-AR vs TVP-Factor vs TVP-FAVAR comparison\n")
+cat("PART 2: TVP-AR vs TVP-Factor vs TVP-ARDI comparison\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 if (length(fc_2srr) > 0) {
@@ -385,7 +351,7 @@ if (length(fc_2srr) > 0) {
   }
   tvp_compare_df <- do.call(rbind, tvp_compare)
   save_tbl(tvp_compare_df, "P2_tvp_3cases_rmse",
-           latex_caption = "RMSE of the 3 TVP cases (AR, Factor, FAVAR)",
+           latex_caption = "RMSE of the 3 TVP cases (AR, Factor, ARDI)",
            latex_label   = "tab:tvp_3cases")
 
   # Plot: grouped bars
@@ -513,8 +479,8 @@ if (length(betas_2srr) > 0) {
     }
     if (length(plots) > 0) {
       panel <- wrap_plots(plots, ncol = 2) +
-        plot_annotation(title = "TVP-FAVAR: top-4 betas per horizon")
-      save_fig(panel, "P3_betas_panel_FAVAR_4h", 12, 8)
+        plot_annotation(title = "TVP-ARDI: top-4 betas per horizon")
+      save_fig(panel, "P3_betas_panel_ARDI_4h", 12, 8)
     }
   }
 }
@@ -550,8 +516,8 @@ if (all(c("AR", "FAVAR") %in% names(betas_2srr))) {
   }
   if (length(cross_rows) > 0) {
     cross_df <- do.call(rbind, cross_rows)
-    save_tbl(cross_df, "P4_betas_cross_AR_FAVAR",
-             latex_caption = "Correlation between TVP-AR and TVP-FAVAR betas (common variables)",
+    save_tbl(cross_df, "P4_betas_cross_AR_ARDI",
+             latex_caption = "Correlation between TVP-AR and TVP-ARDI betas (common variables)",
              latex_label   = "tab:cross_ar_favar")
   }
 }
@@ -943,10 +909,10 @@ if (length(sub_rows) > 0) {
       geom_text(aes(label = sprintf("%.2f", ratio_vs_RW)), size = 3) +
       scale_fill_gradient2(midpoint = 1, low = "darkgreen", high = "darkred",
                            name = "RMSE/RW") +
-      labs(title = "TVP-FAVAR: RMSE relative to RW per sub-period",
+      labs(title = "TVP-ARDI: RMSE relative to RW per sub-period",
             x = "Horizon", y = "Sub-period") +
       theme_minimal()
-    save_fig(p, "P9_heatmap_subperiods_FAVAR", 8, 5)
+    save_fig(p, "P9_heatmap_subperiods_ARDI", 8, 5)
   }
 }
 
@@ -968,10 +934,10 @@ if (has_plotly && !is.null(betas_2srr$FAVAR)) {
     fig <- plot_ly(z = t(mat), x = oos_dates[1:nrow(mat)],
                     y = colnames(mat), type = "heatmap",
                     colorscale = "RdBu", reversescale = TRUE) %>%
-      layout(title = sprintf("TVP-FAVAR betas heatmap, h=%d", h),
+      layout(title = sprintf("TVP-ARDI betas heatmap, h=%d", h),
               xaxis = list(title = ""), yaxis = list(title = "Predictor"))
     html_path <- file.path(FIG_DIR,
-                            sprintf("P10_heatmap_FAVAR_h%02d.html", h))
+                            sprintf("P10_heatmap_ARDI_h%02d.html", h))
     tryCatch({
       htmlwidgets::saveWidget(fig, html_path, selfcontained = TRUE)
       cat("  [html]", html_path, "\n")
@@ -1008,12 +974,12 @@ if (!is.null(coulombe_check) && length(coulombe_check) > 0) {
 }
 
 # ============================================================================ #
-# PART 11b: 2SRR-FAVAR vs OTHER TVPS (AR, Factor)
+# PART 11b: 2SRR-ARDI vs OTHER TVPS (AR, Factor)
 # Side-by-side picture of the 3 TVP forecasts on top of the realized.
 # 4 individual horizons + 1 combined panel.
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 11b: 2SRR-FAVAR vs other TVPs (AR, Factor)\n")
+cat("PART 11b: 2SRR-ARDI vs other TVPs (AR, Factor)\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 plot_2srr_tvps <- function(h) {
@@ -1023,23 +989,23 @@ plot_2srr_tvps <- function(h) {
   # makes fc[,h] already a monthly-rate forecast of pi_{t+h} (NOT divided by h).
   df_p <- data.frame(date = oos_dates,
                       `Realized (monthly y_t)` = y_oos_monthly,
-                      `2SRR-FAVAR`  = fc_2srr$FAVAR[, h],
+                      `2SRR-ARDI`  = fc_2srr$FAVAR[, h],
                       `2SRR-AR`     = fc_2srr$AR[, h],
                       `2SRR-Factor` = fc_2srr$Factor[, h],
                       check.names = FALSE)
   df_long <- pivot_longer(df_p, -date, names_to = "series", values_to = "v")
   df_long$series <- factor(df_long$series,
     levels = c("Realized (monthly y_t)",
-                "2SRR-FAVAR", "2SRR-AR", "2SRR-Factor"))
+                "2SRR-ARDI", "2SRR-AR", "2SRR-Factor"))
   ggplot(df_long, aes(date, v, color = series, linetype = series)) +
     geom_line(linewidth = 0.7, alpha = 0.85) +
     geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
     scale_color_manual(values = c("Realized (monthly y_t)" = "black",
-                                    "2SRR-FAVAR"  = "firebrick",
+                                    "2SRR-ARDI"  = "firebrick",
                                     "2SRR-AR"     = "steelblue",
                                     "2SRR-Factor" = "darkgreen")) +
     scale_linetype_manual(values = c("Realized (monthly y_t)" = "solid",
-                                       "2SRR-FAVAR"  = "solid",
+                                       "2SRR-ARDI"  = "solid",
                                        "2SRR-AR"     = "dashed",
                                        "2SRR-Factor" = "dotted")) +
     labs(title = sprintf("2SRR (3 cases) vs monthly realized, h=%d", h),
@@ -1054,7 +1020,7 @@ for (h in horizons) {
   if (!is.null(p)) save_fig(p, sprintf("P11b_2srr_vs_tvps_h%02d", h), 10, 4.5)
 }
 save_combined_4h(plots_tvps, "P11b_2srr_vs_tvps_4h",
-                  title = "2SRR-FAVAR vs 2SRR-AR vs 2SRR-Factor (4 horizons)")
+                  title = "2SRR-ARDI vs 2SRR-AR vs 2SRR-Factor (4 horizons)")
 
 # Cross-h table: relative RMSE among the 3 TVP cases
 tvps_rmse <- list()
@@ -1079,11 +1045,11 @@ if (length(tvps_rmse) > 0) {
 
 
 # ============================================================================ #
-# PART 11c: 2SRR-FAVAR vs CLASSICAL Ridge (Medeiros)
+# PART 11c: 2SRR-ARDI vs CLASSICAL Ridge (Medeiros)
 # Head-to-head comparison: 2SRR captures something the classical ridge doesn't.
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 11c: 2SRR-FAVAR vs classical Ridge (Medeiros)\n")
+cat("PART 11c: 2SRR-ARDI vs classical Ridge (Medeiros)\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 plot_2srr_vs_ridgemed <- function(h) {
@@ -1091,22 +1057,22 @@ plot_2srr_vs_ridgemed <- function(h) {
   if (h > ncol(fc_2srr$FAVAR) || h > ncol(fc_all$Ridge)) return(NULL)
   df_p <- data.frame(date = oos_dates,
                       `Realized (monthly y_t)` = y_oos_monthly,
-                      `2SRR-FAVAR`       = fc_2srr$FAVAR[, h],
+                      `2SRR-ARDI`       = fc_2srr$FAVAR[, h],
                       `Ridge (Medeiros)` = fc_all$Ridge[, h],
                       check.names = FALSE)
   df_long <- pivot_longer(df_p, -date, names_to = "series", values_to = "v")
   df_long$series <- factor(df_long$series,
-    levels = c("Realized (monthly y_t)", "2SRR-FAVAR", "Ridge (Medeiros)"))
+    levels = c("Realized (monthly y_t)", "2SRR-ARDI", "Ridge (Medeiros)"))
   ggplot(df_long, aes(date, v, color = series, linetype = series)) +
     geom_line(linewidth = 0.7, alpha = 0.9) +
     geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
     scale_color_manual(values = c("Realized (monthly y_t)" = "black",
-                                    "2SRR-FAVAR"       = "firebrick",
+                                    "2SRR-ARDI"       = "firebrick",
                                     "Ridge (Medeiros)" = "steelblue")) +
     scale_linetype_manual(values = c("Realized (monthly y_t)" = "solid",
-                                       "2SRR-FAVAR"       = "solid",
+                                       "2SRR-ARDI"       = "solid",
                                        "Ridge (Medeiros)" = "dashed")) +
-    labs(title = sprintf("2SRR-FAVAR vs classical Ridge (Medeiros), h=%d", h),
+    labs(title = sprintf("2SRR-ARDI vs classical Ridge (Medeiros), h=%d", h),
           x = "", y = "Monthly inflation (p.p.)",
           color = "", linetype = "",
           caption = "Realized = monthly y_t; lines = forecast of pi_{t+h} (no rescaling)") +
@@ -1119,11 +1085,11 @@ for (h in horizons) {
   if (!is.null(p)) save_fig(p, sprintf("P11c_2srr_vs_ridgemed_h%02d", h), 10, 4.5)
 }
 save_combined_4h(plots_ridgemed, "P11c_2srr_vs_ridgemed_4h",
-                  title = "2SRR-FAVAR vs classical Ridge (Medeiros) — 4 horizons")
+                  title = "2SRR-ARDI vs classical Ridge (Medeiros) — 4 horizons")
 
 
 # ============================================================================ #
-# PART 11d: TVP betas (2SRR-FAVAR) vs constant Ridge (Medeiros)
+# PART 11d: TVP betas (2SRR-ARDI) vs constant Ridge (Medeiros)
 #
 # For each horizon, shows the top-K TVP betas varying over the OOS, overlaid
 # with the classical Ridge betas (lines per window, usually nearly horizontal
@@ -1131,11 +1097,11 @@ save_combined_4h(plots_ridgemed, "P11c_2srr_vs_ridgemed_4h",
 #
 # NOTE: the variable vector differs between 2SRR and Medeiros (2SRR uses PCA
 # factors + Y_h lags; Medeiros uses 117 raw vars embed(4)). We plot the top-K
-# TVP-FAVAR betas by SD, without direct alignment with Medeiros Ridge.
+# TVP-ARDI betas by SD, without direct alignment with Medeiros Ridge.
 # For the lambda comparison we use lambdas[step1] vs Medeiros Ridge lambda.
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
-cat("PART 11d: TVP-FAVAR betas vs constant Ridge (Medeiros)\n")
+cat("PART 11d: TVP-ARDI betas vs constant Ridge (Medeiros)\n")
 cat(strrep("=", 78), "\n", sep = "")
 
 plot_betas_tvp_vs_ridge <- function(h, top_n = 4) {
@@ -1170,7 +1136,7 @@ plot_betas_tvp_vs_ridge <- function(h, top_n = 4) {
     geom_hline(yintercept = 0, linetype = 3, alpha = 0.4) +
     geom_hline(yintercept = ridge_med_lvl,  linetype = 2, color = "grey50") +
     geom_hline(yintercept = -ridge_med_lvl, linetype = 2, color = "grey50") +
-    labs(title = sprintf("h=%d: top-%d TVP (FAVAR) betas vs constant Ridge (|beta|=%.3f)",
+    labs(title = sprintf("h=%d: top-%d TVP (ARDI) betas vs constant Ridge (|beta|=%.3f)",
                           h, top_n, ridge_med_lvl),
           x = "", y = "beta",
           caption = "Dashed grey lines = mean |beta| magnitude of Medeiros Ridge (constant reference)") +
@@ -1184,7 +1150,7 @@ for (h in horizons) {
   if (!is.null(p)) save_fig(p, sprintf("P11d_betas_tvp_vs_ridge_h%02d", h), 10, 5)
 }
 save_combined_4h(plots_betas_vs_ridge, "P11d_betas_tvp_vs_ridge_4h",
-                  title = "TVP-FAVAR betas (top 4 by sd) vs constant Ridge — 4h")
+                  title = "TVP-ARDI betas (top 4 by sd) vs constant Ridge — 4h")
 
 
 # ============================================================================ #
@@ -1283,7 +1249,7 @@ if (length(betas_2srr) > 0) {
 #   3. Report the surviving subset for alpha = 0.10 and 0.25.
 #
 # Note: "Models inside the MCS are indistinguishable from the best —
-# 2SRR-FAVAR stays in the MCS for h=12, validating it."
+# 2SRR-ARDI stays in the MCS for h=12, validating it."
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
 cat("PART 12: Model Confidence Set (MCS, Hansen-Lunde-Nason 2011)\n")
@@ -1296,9 +1262,8 @@ if (!has_mcs) {
   suppressPackageStartupMessages(library(MCS))
 
   # Collect ALL forecasts into a standardized list
-  all_fc_for_mcs <- c(fc_all, setNames(fc_2srr, paste0("2SRR_", names(fc_2srr))),
-                       setNames(fc_ridge_step1,
-                                paste0("RidgeStep1_", names(fc_ridge_step1))))
+  all_fc_for_mcs <- c(fc_all, setNames(fc_2srr, tvp_lab(names(fc_2srr))),
+                       setNames(fc_ridge_step1, step1_lab(names(fc_ridge_step1))))
 
   mcs_summary <- list()
   for (h in horizons) {
@@ -1418,7 +1383,7 @@ if (!has_mcs) {
 #   Omega_hat = HAC (Newey-West) with bandwidth h-1 for horizon h.
 #
 # Note: "GW is the right test for our setting (non-nested models, rolling
-# re-estimation). Low p-values = 2SRR-FAVAR has conditional predictive ability
+# re-estimation). Low p-values = 2SRR-ARDI has conditional predictive ability
 # superior to the benchmark."
 # ============================================================================ #
 cat("\n", strrep("=", 78), "\n", sep = "")
@@ -1468,7 +1433,7 @@ gw_test <- function(loss_a, loss_b, h = 1) {
   list(stat = stat, p = pval, n = T_n, q = q)
 }
 
-# Benchmarks against which 2SRR-FAVAR will be tested
+# Benchmarks against which 2SRR-ARDI will be tested
 benchmarks_for_gw <- c(intersect(c("Ridge", "LASSO", "AdaLASSO", "RF",
                                      "Bagging", "Factor", "CSR", "AR"),
                                     names(fc_all)),
@@ -1490,7 +1455,7 @@ if (!is.null(fc_2srr[[ref_case]])) {
       L_bench <- (y_h - M[, h])^2
       g <- gw_test(L_2srr, L_bench, h = h)
       gw_rows[[length(gw_rows) + 1]] <- data.frame(
-        h = h, ref = paste0("2SRR_", ref_case), benchmark = bname,
+        h = h, ref = tvp_lab(ref_case), benchmark = bname,
         n = g$n, GW_stat = round(g$stat, 3), GW_p = round(g$p, 4),
         sign_2srr_better = mean(L_2srr - L_bench, na.rm = TRUE) < 0
       )
@@ -1502,7 +1467,7 @@ if (length(gw_rows) > 0) {
   gw_df <- do.call(rbind, gw_rows)
   save_tbl(gw_df, "P13_GW_test",
            latex_caption = sprintf("Giacomini-White: %s vs benchmarks (chi^2, q=2)",
-                                    paste0("2SRR_", ref_case)),
+                                    tvp_lab(ref_case)),
            latex_label   = "tab:gw")
 
   # Plot: GW p-values per benchmark and horizon
@@ -1558,10 +1523,11 @@ log_v <- function(id, description, status, evidence) {
 }
 
 # V1. yout consistency (already validated in P0b)
-if (exists("audit_df")) {
-  s1 <- if (all(audit_df$consistent)) "OK" else "FAIL"
-  log_v("V1", "yout = cumsum(y) per h",
-        s1, sprintf("max diff across 4 h: %.2e", max(audit_df$max_abs_diff)))
+if (exists("audit_df") && "result" %in% names(audit_df)) {
+  s1 <- if (all(audit_df$result)) "OK" else "FAIL"
+  log_v("V1", "yout = realized rate y[tau+i] (identical across h)",
+        s1, sprintf("%d/%d alignment checks pass",
+                    sum(audit_df$result), nrow(audit_df)))
 }
 
 # V2-V3. Mathematical equivalence (run in 03; here only logged)
@@ -1812,10 +1778,10 @@ if (exists("parc_df")) {
 cat("\n8. SUB-PERIODS\n")
 if (exists("sub_df") && "FAVAR" %in% sub_df$case) {
   rr <- sub_df[sub_df$case == "FAVAR", ]
-  cat("   P9_heatmap_subperiods_FAVAR.pdf.\n")
+  cat("   P9_heatmap_subperiods_ARDI.pdf.\n")
   crises <- rr[rr$period %in% c("GFC", "COVID", "High Inflation"), ]
   wins <- sum(crises$ratio_vs_RW < 1, na.rm = TRUE)
-  cat(sprintf("   2SRR-FAVAR beats RW in %d of %d crisis combinations.\n",
+  cat(sprintf("   2SRR-ARDI beats RW in %d of %d crisis combinations.\n",
               wins, nrow(crises)))
 }
 cat("\n9. COULOMBE SANITY CHECK\n")
@@ -1838,18 +1804,18 @@ if (exists("mcs_long")) {
                   paste(sub_mcs$model, collapse = ", ")))
   }
   cat("   ARGUMENT: models inside the MCS are indistinguishable from the best.\n")
-  cat("   If 2SRR-FAVAR stays inside the MCS at multiple h, it is\n")
+  cat("   If 2SRR-ARDI stays inside the MCS at multiple h, it is\n")
   cat("   statistically validated as competitive. If it is the UNIQUE survivor\n")
   cat("   for some h, it is the best single model at that horizon.\n")
 }
 
 cat("\n0b. AUDIT OF THE REALIZED SERIES\n")
-if (exists("audit_df")) {
-  if (all(audit_df$consistent))
-    cat("   [OK] yout consistent in all 4 horizons (trailing cumulative).\n")
+if (exists("audit_df") && "result" %in% names(audit_df)) {
+  if (all(audit_df$result))
+    cat("   [OK] yout = realized rate y[tau+i], identical across h; rw lag OK.\n")
   else
-    cat("   [FAIL] yout has inconsistencies. Inspect 01_data_prep.R.\n")
-  cat("   Detail in P0b_yout_audit.csv and P0b_yout_4h_combined.pdf.\n")
+    cat("   [FAIL] yout/rw misaligned. Inspect 01_data_prep.R.\n")
+  cat("   Detail in P0b_yout_audit.csv and P0b_realized_rate.pdf.\n")
 }
 
 cat("\n12. ECONOMETRIC VALIDATION (audit)\n")
@@ -1884,7 +1850,7 @@ if (exists("gw_df")) {
   cat("   P13_GW_test.csv | heatmap P13_GW_heatmap.pdf\n")
   sig_gw  <- gw_df[gw_df$GW_p < 0.10 & gw_df$sign_2srr_better, ]
   total_gw <- nrow(gw_df)
-  cat(sprintf("   2SRR-FAVAR rejects H0 (p<0.10) in its favor in %d of %d tests.\n",
+  cat(sprintf("   2SRR-ARDI rejects H0 (p<0.10) in its favor in %d of %d tests.\n",
               nrow(sig_gw), total_gw))
   for (h in horizons) {
     rr <- gw_df[gw_df$h == h, ]
@@ -1927,20 +1893,10 @@ cat("\n", strrep("=", 78), "\n", sep = "")
 cat("PART 14b: Mincer-Zarnowitz + Pesaran-Timmermann tests\n")
 cat(strrep("=", 78), "\n", sep = "")
 
-# Mincer-Zarnowitz test: y_t = alpha + beta * f_t + eps_t.
-# Joint Wald H0: alpha=0 AND beta=1. Lower p-value => reject efficiency.
-#
-# Direct h-step forecasts are built on windows that overlap by h-1 months, so
-# the MZ residuals eps_t inherit an MA(h-1) serial-correlation structure. Plain
-# OLS (homoskedastic) standard errors ignore that dependence and badly
-# UNDER-state the variance of (alpha, beta) at long horizons, inflating the
-# joint Wald and driving p_joint -> 0 for essentially every model at h=12
-# (a spurious, universal rejection). We therefore evaluate the joint Wald with a
-# Newey-West HAC covariance using lag = h-1 (the exact overlap length); at h=1
-# this collapses to a heteroskedasticity-robust (White) estimator. This is the
-# standard correction for forecast-evaluation regressions on overlapping
-# multi-step forecasts and is consistent with the HAC convention used for the
-# Giacomini-White test elsewhere in this script.
+# Mincer-Zarnowitz: y_t = alpha + beta f_t + eps; joint Wald H0: alpha=0, beta=1.
+# Overlapping h-step forecasts give MA(h-1) residuals, so the joint Wald uses a
+# Newey-West HAC covariance (lag = h-1; White at h=1) -- plain OLS SEs would
+# spuriously reject at long horizons.
 mz_test <- function(y, f, h = 1) {
   ok <- complete.cases(y, f)
   if (sum(ok) < 30) return(list(alpha = NA, beta = NA, R2 = NA, p_joint = NA, n = sum(ok)))
@@ -1962,18 +1918,9 @@ mz_test <- function(y, f, h = 1) {
        n = length(y_))
 }
 
-# Pesaran-Timmermann (1992) directional accuracy test.
-# Tests H0: forecast and realized directional moves are independent.
-# Compares sign(Delta_y) with sign(Delta_f) where Delta is the change in the
-# cumulative target relative to a reference (y_{t-h}). The asymptotic variance
-# of (P_hat - P_star) follows PT (1992) eq. (4)–(5):
-#   Var(P_hat)  = P_star (1 - P_star) / n
-#   Var(P_star) = (2 p_y - 1)^2 p_f (1-p_f) / n
-#               + (2 p_f - 1)^2 p_y (1-p_y) / n
-#               + 4 p_y p_f (1-p_y) (1-p_f) / n^2
-# Note the n^2 in the cross-product term: it is one order of magnitude smaller
-# than the leading terms and was previously mis-specified as 1/n, causing the
-# denominator to collapse and the statistic to inflate.
+# Pesaran-Timmermann (1992) directional accuracy: H0 = forecast and realized moves
+# (sign of the change vs the reference y_{t-h}) are independent. Asymptotic
+# variance per PT eq. (4)-(5); the cross-product term carries 1/n^2 (not 1/n).
 "%||%" <- function(a, b) if (is.null(a)) b else a
 pt_test <- function(y, f, y_ref = NULL) {
   ok <- complete.cases(y, f, y_ref %||% y)
@@ -2006,9 +1953,8 @@ pt_test <- function(y, f, y_ref = NULL) {
 # Apply both tests to every available model (Medeiros + 2SRR + RidgeStep1)
 mz_pt_rows <- list()
 all_fc_for_tests <- c(fc_all,
-                      setNames(fc_2srr, paste0("2SRR_", names(fc_2srr))),
-                      setNames(fc_ridge_step1,
-                               paste0("RidgeStep1_", names(fc_ridge_step1))))
+                      setNames(fc_2srr, tvp_lab(names(fc_2srr))),
+                      setNames(fc_ridge_step1, step1_lab(names(fc_ridge_step1))))
 for (mn in names(all_fc_for_tests)) {
   M <- all_fc_for_tests[[mn]]
   for (h in horizons) {

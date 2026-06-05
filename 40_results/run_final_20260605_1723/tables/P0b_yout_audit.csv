@@ -1,0 +1,3 @@
+"check","result"
+"yout cols identical across h",TRUE
+"yout == realized rate y[tau+1..n]",TRUE

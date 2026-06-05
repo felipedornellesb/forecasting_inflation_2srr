@@ -1,29 +1,13 @@
 # =============================================================================
-# 05_article_figures.R — single source for every article figure and the
-# console diagnostics the prose draws on.
+# 05_article_figures.R  --  every article figure and the console diagnostics the
+# prose draws on. Benchmark = the Medeiros AR; championed spec = 2SRR-ARDI (the
+# data-rich form, Goulet Coulombe 2025). Forecasts read from 30_output (rate
+# target, yout[i,h] = pi_{t+h}).
 #
-# Replaces the legacy 05/05b/06/07 split. All comparisons take the
-# autoregression (AR) of Medeiros et al. (2021) as the benchmark and 2SRR-FAVAR
-# as the championed specification (the data-rich form faithful to Goulet
-# Coulombe, 2025). Forecasts are read from 30_output, with the inflation rate
-# target (yout[i,h] = pi_{t+h}) produced by 01_data_prep.R.
-#
-# Figures
-#   FIG1 — Relative RMSE vs AR with Giacomini-White conditional-test p-values
-#   FIG2 — Diebold-Mariano heatmap, reference = 2SRR-FAVAR
-#   FIG3 — 2SRR-FAVAR coefficient paths (h = 6, top-5 by variability)
-#   FIG4 — CSFE of the three TVP specs against AR, 4-panel (h = 1, 3, 6, 12)
-#   FIG5 — Cross-validation: share of windows at the grid ceiling
-#   FIG6 — Original vs extended grid: RMSE/RW for the three TVP specs
-#   FIG7-FIG10 — Realised inflation vs forecasts (Top-3 by RMSE + Ridge + 2SRR),
-#                one panel per horizon (y-axis clipped to the realised range)
-#
-# Console reports (for the article prose):
-#   - RMSE(model)/RMSE(AR) and GW (HAC) p-values
-#   - DM p-values, 2SRR-FAVAR as reference
-#   - Top-3 lowest RMSE per horizon
-#   - Final cumulative CSFE vs AR
-#   - Mincer-Zarnowitz table with RMSE relative to 2SRR-FAVAR
+# Figures: FIG1 rel-RMSE vs AR + Giacomini-White p; FIG2 Diebold-Mariano heatmap
+# (ref 2SRR-ARDI); FIG3 ARDI coefficient paths; FIG4 CSFE vs AR (4 panels);
+# FIG5 grid-ceiling share; FIG6 original vs extended grid; FIG7-10 realized vs
+# forecasts per horizon. Plus console tables (RMSE/AR, GW, DM, MZ).
 # =============================================================================
 suppressPackageStartupMessages({
   library(ggplot2); library(dplyr); library(tidyr); library(scales); library(sandwich)
@@ -48,7 +32,7 @@ MODEL_COLORS <- c(
   "Ridge"             = "#7F7F7F",
   "2SRR-AR"           = "#D62728",
   "2SRR-Factor"       = "#2CA02C",
-  "2SRR-FAVAR"        = "#1F4E9C",
+  "2SRR-ARDI"        = "#1F4E9C",
   "LASSO"             = "#FF7F0E",
   "Elastic Net"       = "#17BECF",
   "Adaptive LASSO"    = "#9467BD",
@@ -84,7 +68,7 @@ rmse_fn <- function(y, f) {
 }
 disp <- function(x) {
   m <- c("2SRR_AR" = "2SRR-AR", "2SRR_Factor" = "2SRR-Factor",
-         "2SRR_FAVAR" = "2SRR-FAVAR", "AR_BIC" = "AR-BIC",
+         "2SRR_FAVAR" = "2SRR-ARDI", "AR_BIC" = "AR-BIC",
          "T.Factor" = "Target Factor", "ElNET" = "Elastic Net",
          "AdaLASSO" = "Adaptive LASSO", "AdaElNET" = "Adaptive ElNet",
          "RF" = "Random Forest", "Ridge" = "Ridge", "LASSO" = "LASSO",
@@ -157,7 +141,7 @@ if (file.exists(fp)) all_fc[["RidgeStep1_AR"]] <- ld_fc("Ridge_from_2SRR_AR.rda"
 
 AR_fc    <- all_fc[["AR"]]               # Medeiros autoregression (benchmark)
 ref_FAVAR <- all_fc[["2SRR_FAVAR"]]      # championed spec (faithful to Coulombe)
-fc_tvp <- list("2SRR-FAVAR"  = ref_FAVAR,
+fc_tvp <- list("2SRR-ARDI"  = ref_FAVAR,
                "2SRR-Factor" = all_fc[["2SRR_Factor"]],
                "2SRR-AR"     = all_fc[["2SRR_AR"]])
 
@@ -166,7 +150,7 @@ cat(sprintf("Loaded %d forecasts; %d OOS windows; horizons %s\n",
 
 # Row order for the heatmaps (top = best, bottom = worst on the AR scale).
 mod_levels <- rev(c(
-  "Ridge", "Ridge-Step1-AR", "2SRR-FAVAR", "2SRR-Factor",
+  "Ridge", "Ridge-Step1-AR", "2SRR-ARDI", "2SRR-Factor",
   "AR", "AR-BIC", "Bagging", "Factor", "Target Factor", "CSR",
   "Adaptive ElNet", "Adaptive LASSO", "Elastic Net", "LASSO",
   "Random Forest", "2SRR-AR"))
@@ -207,8 +191,8 @@ fig1 <- ggplot(gw_df, aes(factor(h), model,
   theme_article + theme(panel.grid = element_blank())
 save_fig(fig1, "FIG1_gw_relrmse_vs_AR", width = 8.8, height = 7)
 
-# ---- FIG2 — Diebold-Mariano heatmap, reference = 2SRR-FAVAR ----------------
-cat("FIG2: DM heatmap (reference = 2SRR-FAVAR) ...\n")
+# ---- FIG2 — Diebold-Mariano heatmap, reference = 2SRR-ARDI ----------------
+cat("FIG2: DM heatmap (reference = 2SRR-ARDI) ...\n")
 dm_rows <- list()
 for (mn in names(all_fc)) {
   if (mn == "2SRR_FAVAR") next
@@ -234,24 +218,26 @@ dm_df <- if (length(dm_rows)) do.call(rbind, dm_rows) else NULL
 if (is.null(dm_df) || nrow(dm_df) == 0) {
   cat("  [skip] FIG2: no valid Diebold-Mariano cells\n")
 } else {
-dm_df$signed_p <- ifelse(dm_df$ref_wins, -dm_df$p, dm_df$p)
+# Colour intensity must rise as the p-value falls (more significant = deeper).
+# strength = (1 - p) carries the significance; the sign carries the direction
+# (negative = the reference 2SRR-ARDI is the more accurate forecast).
+dm_df$strength <- ifelse(dm_df$ref_wins, -(1 - dm_df$p), (1 - dm_df$p))
 dm_df$model    <- factor(dm_df$model,
                          levels = intersect(mod_levels, unique(dm_df$model)))
-fig2 <- ggplot(dm_df, aes(factor(h), model,
-                          fill = pmin(pmax(signed_p, -0.5), 0.5))) +
+fig2 <- ggplot(dm_df, aes(factor(h), model, fill = strength)) +
   geom_tile(colour = "white", linewidth = 0.4) +
   geom_text(aes(label = sprintf("%.2f", p)), size = 3) +
   scale_fill_gradient2(midpoint = 0, low = "#1A7F37", mid = "white",
-                       high = "#B0202A", limits = c(-0.5, 0.5),
-                       name = "Signed p-value") +
+                       high = "#B0202A", limits = c(-1, 1),
+                       name = "Signed (1 - p)") +
   labs(x = "Horizon (h, months)", y = NULL,
-       subtitle = "Reference: 2SRR-FAVAR. Green = 2SRR-FAVAR more accurate; red = the other model. Cell = DM p-value") +
+       subtitle = "Reference: 2SRR-ARDI. Green = 2SRR-ARDI more accurate, red = the other model; the deeper the colour, the lower the p-value (more significant). Cell = DM p-value") +
   theme_article + theme(panel.grid = element_blank())
-save_fig(fig2, "FIG2_dm_heatmap_2SRR_FAVAR", width = 8.5, height = 6.5)
+save_fig(fig2, "FIG2_dm_heatmap_2SRR_ARDI", width = 8.5, height = 6.5)
 }
 
-# ---- FIG3 — 2SRR-FAVAR coefficient paths (h = 6, top-5 by variability) ------
-cat("FIG3: 2SRR-FAVAR coefficient paths (h = 6) ...\n")
+# ---- FIG3 — 2SRR-ARDI coefficient paths (h = 6, top-5 by variability) ------
+cat("FIG3: 2SRR-ARDI coefficient paths (h = 6) ...\n")
 bp <- file.path(DIR_BETA, "betas_2SRR_FAVAR.rda")
 if (file.exists(bp)) {
   e <- new.env(); load(bp, envir = e)
@@ -286,9 +272,9 @@ if (file.exists(bp)) {
       scale_colour_brewer(palette = "Dark2", name = NULL) +
       scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
       labs(x = "Forecast origin", y = "Estimated coefficient",
-           subtitle = "2SRR-FAVAR: five most time-varying coefficients (inflation lags + factor loadings), h = 6") +
+           subtitle = "2SRR-ARDI: five most time-varying coefficients (inflation lags + factor loadings), h = 6") +
       theme_article
-    save_fig(fig3, "FIG3_coef_paths_2srrFAVAR_h6", width = 9.5, height = 5.5)
+    save_fig(fig3, "FIG3_coef_paths_2srrARDI_h6", width = 9.5, height = 5.5)
   } else cat("  [skip] no valid TVP betas in betas_2SRR_FAVAR.rda\n")
 } else cat("  [skip] betas_2SRR_FAVAR.rda not found\n")
 
@@ -305,14 +291,14 @@ csfe_dfs <- lapply(hz, function(hC) {
     h    = factor(paste0("h = ", hC), levels = paste0("h = ", hz)),
     `2SRR-AR`     = csum0(e_b - (yout[, hC] - fc_tvp[["2SRR-AR"]][, hC])^2),
     `2SRR-Factor` = csum0(e_b - (yout[, hC] - fc_tvp[["2SRR-Factor"]][, hC])^2),
-    `2SRR-FAVAR`  = csum0(e_b - (yout[, hC] - fc_tvp[["2SRR-FAVAR"]][, hC])^2),
+    `2SRR-ARDI`  = csum0(e_b - (yout[, hC] - fc_tvp[["2SRR-ARDI"]][, hC])^2),
     check.names = FALSE)
 })
 csfe_long <- tidyr::pivot_longer(do.call(rbind, csfe_dfs),
                                  cols = -c(date, h),
                                  names_to = "Model", values_to = "CSFE")
 csfe_long$Model <- factor(csfe_long$Model,
-                          levels = c("2SRR-AR", "2SRR-Factor", "2SRR-FAVAR"))
+                          levels = c("2SRR-AR", "2SRR-Factor", "2SRR-ARDI"))
 fig4 <- ggplot(csfe_long, aes(date, CSFE, colour = Model)) +
   annotate("rect", xmin = as.Date("2020-02-01"), xmax = as.Date("2020-09-01"),
            ymin = -Inf, ymax = Inf, alpha = 0.13, fill = "grey40") +
@@ -336,7 +322,7 @@ if (file.exists(f5)) {
   p5 <- read.csv(f5, stringsAsFactors = FALSE)
   p5 <- p5[p5$step == "lambda", ]
   p5$case <- factor(p5$case, levels = c("AR", "Factor", "FAVAR"),
-                    labels = c("2SRR-AR", "2SRR-Factor", "2SRR-FAVAR"))
+                    labels = c("2SRR-AR", "2SRR-Factor", "2SRR-ARDI"))
   fig5 <- ggplot(p5, aes(factor(h), pct_at_top, fill = case)) +
     geom_col(position = position_dodge(0.8), width = 0.75) +
     geom_text(aes(label = sprintf("%.0f%%", pct_at_top)),
@@ -360,7 +346,7 @@ if (file.exists(f_o) && file.exists(f_e)) {
     df <- df[df$model %in% c("2SRR_AR", "2SRR_Factor", "2SRR_FAVAR"),
              c("model", "h1", "h3", "h6", "h12")]
     df$model <- factor(disp(df$model),
-                       levels = c("2SRR-AR", "2SRR-Factor", "2SRR-FAVAR"))
+                       levels = c("2SRR-AR", "2SRR-Factor", "2SRR-ARDI"))
     df$grid <- grid_lab
     tidyr::pivot_longer(df, c(-model, -grid), names_to = "h", values_to = "ratio")
   }
@@ -430,7 +416,7 @@ for (idx in seq_along(hz)) {
 # scale (percentage points). Unlike the legacy P7 in 04_analysis.R, the
 # forecasts are NOT divided by h: with the inflation-rate target (yout = pi_t+h)
 # the model already produces a monthly-rate forecast, so dividing by h would
-# wrongly push the lines toward zero. 2SRR-FAVAR is the champion, shown with
+# wrongly push the lines toward zero. 2SRR-ARDI is the champion, shown with
 # Ridge and the leading Medeiros models, in the 05 colour scheme. The realised
 # line is the contemporaneous monthly inflation at the forecast origin; each
 # coloured line is that model's forecast made h months ahead.
@@ -451,10 +437,10 @@ mi_real <- mi_long[mi_long$Series == "Realized", ]
 mi_fc   <- mi_long[mi_long$Series != "Realized", ]
 # Keep all series in the legend (FAVAR first for prominence) ...
 mi_fc$Series <- factor(mi_fc$Series, levels = disp(mi_models))
-# ... but DRAW 2SRR-FAVAR last (on top) and thicker, so it stands out against
+# ... but DRAW 2SRR-ARDI last (on top) and thicker, so it stands out against
 # the other, thinner forecast lines (the realised series sits just beneath it).
-mi_fc_oth <- mi_fc[mi_fc$Series != "2SRR-FAVAR", ]
-mi_fc_fav <- mi_fc[mi_fc$Series == "2SRR-FAVAR", ]
+mi_fc_oth <- mi_fc[mi_fc$Series != "2SRR-ARDI", ]
+mi_fc_fav <- mi_fc[mi_fc$Series == "2SRR-ARDI", ]
 yr  <- range(y_oos_monthly, na.rm = TRUE); pad <- 0.30 * diff(yr)
 fig11 <- ggplot(mapping = aes(date, value)) +
   geom_hline(yintercept = 0, linetype = 3, colour = "grey60") +
@@ -468,7 +454,7 @@ fig11 <- ggplot(mapping = aes(date, value)) +
   coord_cartesian(ylim = c(yr[1] - pad, yr[2] + pad)) +
   labs(x = "Forecast origin",
        y = "Monthly inflation %",
-       subtitle = "Realised monthly inflation (black) vs h-step forecasts; 2SRR-FAVAR (blue). Natural monthly scale, y-axis clipped to the realised range") +
+       subtitle = "Realised monthly inflation (black) vs h-step forecasts; 2SRR-ARDI (blue). Natural monthly scale, y-axis clipped to the realised range") +
   theme_article
 save_fig(fig11, "FIG11_monthly_inflation_vs_fc_4h", width = 11, height = 7)
 
@@ -490,7 +476,7 @@ for (nm in c("2SRR_FAVAR", "2SRR_Factor", "2SRR_AR")) {
   cat(line, "\n")
 }
 
-cat("\n=== DM two-sided p-value with 2SRR-FAVAR as the reference ===\n")
+cat("\n=== DM two-sided p-value with 2SRR-ARDI as the reference ===\n")
 for (lab in if (is.null(dm_df)) character(0) else
             c("AR", "2SRR-Factor", "2SRR-AR", "Random Forest",
               "LASSO", "Elastic Net", "Ridge")) {
@@ -563,11 +549,15 @@ for (mn in disp(mz_models)) {
 mz_hm <- mz_tab
 mz_hm$model <- factor(mz_hm$model, levels = rev(disp(mz_models)))   # AR on top
 mz_hm$lab   <- sprintf("%.2f\n(%.3f)", mz_hm$rel, mz_hm$mzp)
-fig12 <- ggplot(mz_hm, aes(factor(h), model, fill = pmin(pmax(mzp, 0), 0.5))) +
+fig12 <- ggplot(mz_hm, aes(factor(h), model, fill = pmin(pmax(mzp, 0), 0.20))) +
   geom_tile(colour = "white", linewidth = 0.4) +
   geom_text(aes(label = lab), size = 2.8, lineheight = 0.85) +
+  # Diverging scale centred (symmetric) on the 0.10 significance threshold so a
+  # rejected forecast (p -> 0) saturates to deep red and a non-rejected one
+  # (p >= 0.20) to deep green, with white at the threshold. A wider upper limit
+  # would normalise by the green side and leave the rejected cells a faint pink.
   scale_fill_gradient2(midpoint = 0.10, low = "#B0202A", mid = "white",
-                       high = "#1A7F37", limits = c(0, 0.5),
+                       high = "#1A7F37", limits = c(0, 0.20),
                        oob = scales::squish, name = "Mincer-Zarnowitz p-value") +
   labs(x = "Horizon (h, months)", y = NULL,
        subtitle = "RMSE relative to AR, with the MZ joint p-value below. Green (p > 0.10) = efficiency not rejected; red = rejected") +

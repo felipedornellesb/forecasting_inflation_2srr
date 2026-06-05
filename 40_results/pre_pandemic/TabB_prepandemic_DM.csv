@@ -1,0 +1,33 @@
+"h","model","p","ref_wins"
+1,"AR",0.0181,TRUE
+3,"AR",0.1534,TRUE
+6,"AR",0.1164,TRUE
+12,"AR",0.0016,TRUE
+1,"Ridge",0.1435,TRUE
+3,"Ridge",0.2795,TRUE
+6,"Ridge",0.0526,TRUE
+12,"Ridge",0.2135,TRUE
+1,"LASSO",0.3153,FALSE
+3,"LASSO",0.463,TRUE
+6,"LASSO",0.535,TRUE
+12,"LASSO",0.3091,TRUE
+1,"Elastic Net",0.3255,FALSE
+3,"Elastic Net",0.5254,TRUE
+6,"Elastic Net",0.2786,TRUE
+12,"Elastic Net",0.5143,TRUE
+1,"Random Forest",0.2814,TRUE
+3,"Random Forest",0.928,FALSE
+6,"Random Forest",0.715,FALSE
+12,"Random Forest",0.3014,TRUE
+1,"Factor",0.3696,TRUE
+3,"Factor",0.0091,TRUE
+6,"Factor",0.0763,TRUE
+12,"Factor",0.0467,TRUE
+1,"Bagging",0.4108,TRUE
+3,"Bagging",0.1807,TRUE
+6,"Bagging",0.0992,TRUE
+12,"Bagging",0.1932,TRUE
+1,"CSR",0.7866,TRUE
+3,"CSR",0.1952,TRUE
+6,"CSR",0.0385,TRUE
+12,"CSR",0.1528,TRUE

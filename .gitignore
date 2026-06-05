@@ -2,6 +2,8 @@
 .RData
 .Rproj.user
 30_output/**/*.rda
+30_output/**/*.log
+30_output/forecasts_extgrid
 40_results/tables/*.csv
 40_results/tables/*.tex
 40_results/figures/*.pdf
@@ -9,10 +11,10 @@
 40_results/figures
 40_results/**/*.tex
 40_results/**/*.txt
-40_results/**/P10_heatmap_FAVAR_h01_files/**
-40_results/**/P10_heatmap_FAVAR_h03_files/**
-40_results/**/P10_heatmap_FAVAR_h06_files/**
-40_results/**/P10_heatmap_FAVAR_h12_files/**
+40_results/**/P10_heatmap_ARDI_h01_files
+40_results/**/P10_heatmap_ARDI_h03_files
+40_results/**/P10_heatmap_ARDI_h06_files
+40_results/**/P10_heatmap_ARDI_h12_files
 40_results/run_final_2026_05_16_ptbr/**
 .DS_Store
 .claude
@@ -20,4 +22,5 @@
 40_results/article_figures/tables/*.docx
 40_results/article_figures/tables/
 .gitignore
+run_pipeline.ps1
 
