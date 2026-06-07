@@ -187,7 +187,7 @@ fig1 <- ggplot(gw_df, aes(factor(h), model,
                        oob = scales::squish,
                        name = "RMSE(model) / RMSE(AR)") +
   labs(x = "Horizon (h, months)", y = NULL,
-       subtitle = "RMSE relative to AR (below 1, green = beats AR), with the Giacomini-White conditional-test p-value below; * p<0.10, ** p<0.05, *** p<0.01") +
+       subtitle = "RMSE relative to AR (green < 1 = beats AR), with the Giacomini-White conditional p-value below.\n* p<.10   ** p<.05   *** p<.01") +
   theme_article + theme(panel.grid = element_blank())
 save_fig(fig1, "FIG1_gw_relrmse_vs_AR", width = 8.8, height = 7)
 
@@ -231,7 +231,7 @@ fig2 <- ggplot(dm_df, aes(factor(h), model, fill = strength)) +
                        high = "#B0202A", limits = c(-1, 1),
                        name = "Signed (1 - p)") +
   labs(x = "Horizon (h, months)", y = NULL,
-       subtitle = "Reference: 2SRR-ARDI. Green = 2SRR-ARDI more accurate, red = the other model; the deeper the colour, the lower the p-value (more significant). Cell = DM p-value") +
+       subtitle = "2SRR-ARDI as Benchmark. Green = 2SRR-ARDI more accurate; deeper colour = lower p-value.\nCell = Diebold-Mariano p-value.") +
   theme_article + theme(panel.grid = element_blank())
 save_fig(fig2, "FIG2_dm_heatmap_2SRR_ARDI", width = 8.5, height = 6.5)
 }
@@ -454,7 +454,7 @@ fig11 <- ggplot(mapping = aes(date, value)) +
   coord_cartesian(ylim = c(yr[1] - pad, yr[2] + pad)) +
   labs(x = "Forecast origin",
        y = "Monthly inflation %",
-       subtitle = "Realised monthly inflation (black) vs h-step forecasts; 2SRR-ARDI (blue). Natural monthly scale, y-axis clipped to the realised range") +
+       subtitle = "Realised monthly inflation (black) vs h-step forecasts; 2SRR-ARDI (blue).\nNatural monthly scale, y-axis clipped to the realised range.") +
   theme_article
 save_fig(fig11, "FIG11_monthly_inflation_vs_fc_4h", width = 11, height = 7)
 
