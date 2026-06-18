@@ -410,6 +410,63 @@ for (idx in seq_along(hz)) {
            width = 10, height = 4.8)
 }
 
+# ---- FIG7 — Realised inflation vs forecasts (combined panel per horizon) ----
+cat("FIG7n: realised vs forecasts (combined panel per horizon) ...\n")
+top3_per_h <- function(h) {
+  rmse_h <- sapply(all_fc, function(M) rmse_fn(yout[, h], M[, h]))
+  rmse_h <- rmse_h[!is.na(rmse_h)]
+  names(sort(rmse_h)[seq_len(min(3, length(rmse_h)))])
+}
+
+# Definir os níveis globais para que o patchwork unifique a legenda (sem duplicar)
+must_models <- c("Ridge", "2SRR_FAVAR", "2SRR_Factor", "2SRR_AR")
+all_top3 <- unique(unlist(lapply(hz, top3_per_h)))
+global_legend_levels <- setdiff(unique(disp(c(must_models, all_top3))), "Realized")
+
+plot_real_vs_fc <- function(h) {
+  sel  <- unique(c(top3_per_h(h), intersect(must_models, names(all_fc))))
+  df   <- data.frame(date = oos_dates, Realized = yout[, h])
+  for (m in sel) df[[disp(m)]] <- all_fc[[m]][, h]
+  long <- tidyr::pivot_longer(df, -date, names_to = "Series", values_to = "value")
+  
+  realised  <- long[long$Series == "Realized", ]
+  forecasts <- long[long$Series != "Realized", ]
+  
+  # Força a mesma escala de fatores em todos os painéis
+  forecasts$Series <- factor(forecasts$Series, levels = global_legend_levels)
+  
+  # Isola o 2SRR-ARDI para desenhá-lo por último (em cima dos outros)
+  fc_oth <- forecasts[forecasts$Series != "2SRR-ARDI", ]
+  fc_fav <- forecasts[forecasts$Series == "2SRR-ARDI", ]
+  # Focus the y-axis on the realised range (plus margin). At long horizons the
+  # high-dimensional ridge overshoots far beyond it (it chases noise); clipping
+  # keeps the realised-vs-forecast comparison legible. coord_cartesian clips the
+  # view without dropping data from the lines.
+  yr  <- range(yout[, h], na.rm = TRUE); pad <- 0.25 * diff(yr)
+  ylim <- c(yr[1] - pad, yr[2] + pad)
+  p <- ggplot(mapping = aes(date, value)) +
+    geom_line(data = fc_oth,    aes(colour = Series), linewidth = 0.6, alpha = 0.85, na.rm = TRUE) +
+    geom_line(data = realised,  colour = "black",     linewidth = 0.6, na.rm = TRUE) +
+    geom_line(data = fc_fav,    aes(colour = Series), linewidth = 0.6, na.rm = TRUE) +
+    scale_colour_manual(values = MODEL_COLORS, name = NULL, drop = FALSE) +
+    scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+    coord_cartesian(ylim = ylim) +
+    labs(x = if (h == max(hz)) "Date" else NULL, 
+         y = sprintf("Inflation rate (%%), h = %d", h)) +
+    theme_article
+if (h == min(hz)) {
+    p <- p + labs(subtitle = "Realised (black) vs forecasts (Top-3 by RMSE + Ridge + 2SRR);\ny-axis clipped to the realised range")
+  }
+  p
+}
+
+plots_real_fc <- lapply(hz, plot_real_vs_fc)
+fig7n_combined <- wrap_plots(plots_real_fc, ncol = 1) + 
+  plot_layout(guides = "collect") & 
+  theme(legend.position = "bottom")
+
+save_fig(fig7n_combined, "FIG7n_realized_vs_fc_combined", width = 10, height = 12)
+
 # ---- FIG11 — Monthly inflation vs forecasts (P7 style, natural scale) -------
 # Realised MONTHLY inflation y_t (the actual observed series, the same line in
 # every panel) against the h-step forecasts, in the data's natural monthly
@@ -446,9 +503,9 @@ fig11 <- ggplot(mapping = aes(date, value)) +
   geom_hline(yintercept = 0, linetype = 3, colour = "grey60") +
   geom_line(data = mi_fc_oth, aes(colour = Series), linewidth = 0.45,
             alpha = 0.85, na.rm = TRUE) +
-  geom_line(data = mi_real,   colour = "black", linewidth = 0.45, na.rm = TRUE) +
-  geom_line(data = mi_fc_fav, aes(colour = Series), linewidth = 0.45, na.rm = TRUE) +
-  facet_wrap(~ h, ncol = 2) +
+  geom_line(data = mi_real,   colour = "black", linewidth = 0.65, na.rm = TRUE) +
+  geom_line(data = mi_fc_fav, aes(colour = Series), linewidth = 0.55, na.rm = TRUE) +
+  facet_wrap(~ h, ncol = 1) +
   scale_colour_manual(values = MODEL_COLORS, name = NULL) +
   scale_x_date(date_breaks = "3 years", date_labels = "%Y") +
   coord_cartesian(ylim = c(yr[1] - pad, yr[2] + pad)) +
