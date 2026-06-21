@@ -102,7 +102,7 @@ constant-parameter ridge.
 |------|------------|
 | 2SRR-AR | `ly` lags of cumulative inflation only |
 | 2SRR-Factor | `lf` lags of PCA factors only |
-| 2SRR-FAVAR | inflation lags + PCA factor lags (labelled **2SRR-ARDI** in the article) |
+| 2SRR-ARDI | inflation lags + PCA factor lags (labelled **2SRR-ARDI** in the article) |
 
 ### h-step target: inflation rate
 
