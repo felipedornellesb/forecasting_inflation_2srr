@@ -15,17 +15,24 @@ predictive-accuracy tests, and figures plus CSV tables.
 ## Pipeline overview
 
 ```
-01_data_prep.R         -> yout.rda (inflation rate target pi_{t+h}) + rw.rda (random-walk benchmark)
-02_forecast_medeiros.R -> 12 econometric / ML benchmarks (Medeiros et al., 2021)
-03_forecast_2srr.R     -> 2SRR in 3 TVP specifications (AR, Factor, FAVAR)
-04_analysis.R          -> RMSE, Diebold-Mariano, Giacomini-White, Model Confidence Set,
-                          Mincer-Zarnowitz (Newey-West HAC); beta trajectories; figures + CSV tables
-05_article_figures.R   -> every article figure (AR as benchmark, 2SRR-AR championed) and
-                          all console diagnostics the prose draws on
+01_data_prep.R            -> yout.rda (inflation rate target pi_{t+h}) + rw.rda (random-walk
+                             benchmark); imports the 12 official Medeiros benchmarks from the
+                             professor's run (benchmark of record)
+02_forecast_medeiros.R    -> OPTIONAL local replication of the 12 benchmarks (matches the
+                             professor at h=1, corr 0.9999)
+03_forecast_2srr.R        -> 2SRR-Factor and 2SRR-ARDI (FAVAR case) on the rolling windows
+03b_forecast_2srr_AR.R    -> 2SRR-AR (GARCH step isolated in a child process via callr)
+04_analysis.R             -> RMSE, Diebold-Mariano, Giacomini-White, Model Confidence Set,
+                             Mincer-Zarnowitz (Newey-West HAC); beta trajectories; figures + CSV tables
+05_article_figures.R      -> every article figure (AR as benchmark, 2SRR-ARDI championed) and
+                             all console diagnostics the prose draws on
+06_robustness.R           -> pre-pandemic sub-sample figures and tables
+07_revision_diagnostics.R -> MCS robustness + Giacomini-Rossi fluctuation test (revision appendix)
 ```
 
-Run the numbered scripts in order. `04_analysis.R` is robust to missing inputs —
-any benchmark model whose forecast file does not exist is silently skipped.
+**Final chain: `01 -> 03 -> 03b -> 04 -> 05`** (02 is an optional replication check;
+06 and 07 are standalone). `04_analysis.R` is robust to missing inputs — any
+benchmark model whose forecast file does not exist is silently skipped.
 
 ---
 
@@ -34,12 +41,13 @@ any benchmark model whose forecast file does not exist is silently skipped.
 From the **project root**, in R:
 
 ```r
-source("00_prog/00_setup.R")             # install packages; download Coulombe + Medeiros functions
-source("00_prog/01_data_prep.R")         # build yout.rda and rw.rda (180 windows x 12 horizons)
-source("00_prog/02_forecast_medeiros.R") # 12 benchmark models (rolling window)
-source("00_prog/03_forecast_2srr.R")     # 2SRR via coulombe_fast (parallel over windows)
-source("00_prog/04_analysis.R")          # tests, figures and CSV tables
-source("00_prog/05_article_figures.R")   # publication figures (PNG/PDF)
+source("00_prog/00_setup.R")              # install packages; download Coulombe + Medeiros functions
+source("00_prog/01_data_prep.R")          # yout.rda + rw.rda (312 windows x 12 horizons); import benchmarks
+source("00_prog/03_forecast_2srr.R")      # 2SRR-Factor and 2SRR-ARDI via coulombe_fast (rolling windows)
+source("00_prog/03b_forecast_2srr_AR.R")  # 2SRR-AR (GARCH step isolated via callr)
+source("00_prog/04_analysis.R")           # tests, figures and CSV tables
+source("00_prog/05_article_figures.R")    # publication figures (PNG/PDF)
+# Optional: 02_forecast_medeiros.R (local replication), 06_robustness.R, 07_revision_diagnostics.R
 ```
 
 Prerequisite: place `data.rda` in `10_data/`. Target variable: `CPIAUCSL`.
@@ -94,7 +102,7 @@ constant-parameter ridge.
 |------|------------|
 | 2SRR-AR | `ly` lags of cumulative inflation only |
 | 2SRR-Factor | `lf` lags of PCA factors only |
-| 2SRR-FAVAR | inflation lags + PCA factor lags |
+| 2SRR-FAVAR | inflation lags + PCA factor lags (labelled **2SRR-ARDI** in the article) |
 
 ### h-step target: inflation rate
 
@@ -105,11 +113,13 @@ observed `h` months ahead of the forecast origin. This is the rate convention
 adopted by the research group, consistent with the direct multi-step setup
 of Medeiros et al. (2021).
 
-### Out-of-sample design: 180 windows
+### Out-of-sample design: 312 windows
 
-OOS from **Jul/2010 to Jun/2025**, horizons `h ∈ {1, 3, 6, 12}`. The benchmarks
-use a rolling window fixed at 606 observations (Medeiros `rolling_window.R`);
-2SRR uses an expanding window starting at the same 606-observation training set.
+OOS from **Jul/1999 to Jun/2025** (312 windows), horizons `h ∈ {1, 3, 6, 12}`.
+Both the benchmarks and the 2SRR use the **same fixed-length rolling window** of
+474 observations at `h = 1` (`window_size = bigt - (n_oos + h - 1)`, Medeiros
+`rolling_window.R`), so the comparison isolates the estimator rather than the
+estimation sample.
 
 ### Mincer-Zarnowitz with a HAC covariance
 
@@ -117,7 +127,7 @@ The Mincer-Zarnowitz joint test (`04_analysis.R`, PART 14b) regresses the
 realised inflation rate on each forecast and tests `α = 0` and `β = 1` jointly.
 The joint Wald is evaluated with a Newey-West HAC covariance
 (`sandwich::NeweyWest`) to allow for residual serial dependence over a
-fifteen-year evaluation window that includes the pandemic and the 2021–22
+twenty-six-year evaluation window that includes the pandemic and the 2021–22
 surge; the lag truncation is set to `h − 1` as a conservative default
 (reducing to the heteroskedasticity-robust case at `h = 1`).
 
@@ -131,13 +141,16 @@ jobs (3 cases × 4 horizons) per window. Default: `detectCores() - 1`.
 ## Repository structure
 
 ```
-00_prog/                Scripts (numbered, run in order)
+00_prog/                Scripts (final chain: 01 -> 03 -> 03b -> 04 -> 05)
   00_setup.R               Installs packages, downloads external functions, defines factor() PCA
-  01_data_prep.R           yout, rw (180 x 12)
-  02_forecast_medeiros.R   12 benchmark models
-  03_forecast_2srr.R       3 TVP cases x 4 horizons x 180 windows
+  01_data_prep.R           yout, rw (312 x 12); imports the 12 official benchmarks
+  02_forecast_medeiros.R   OPTIONAL local replication of the 12 benchmarks
+  03_forecast_2srr.R       2SRR-Factor + 2SRR-ARDI (FAVAR), 4 horizons x 312 windows
+  03b_forecast_2srr_AR.R   2SRR-AR (GARCH step isolated via callr)
   04_analysis.R            Tests, figures, CSV tables
   05_article_figures.R     All article figures + console diagnostics (single source)
+  06_robustness.R          Pre-pandemic sub-sample figures and tables
+  07_revision_diagnostics.R  MCS robustness + Giacomini-Rossi fluctuation test
 
 10_data/                data.rda (FRED-MD, 786 obs x 117 vars + date) — not tracked
 
